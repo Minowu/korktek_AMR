@@ -1,0 +1,23 @@
+[
+  {
+    "username": "admin",
+    "password": "123",
+    "permissions": [
+      "*"
+    ]
+  },
+  {
+    "username": "worker_A1",
+    "password": "123",
+    "permissions": [
+      "/control/line-a/head"
+    ]
+  },
+  {
+    "username": "worker_a_dropoff",
+    "password": "123",
+    "permissions": [
+      "/control/line-a/tail"
+    ]
+  }
+]

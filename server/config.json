@@ -1,0 +1,83 @@
+{
+  "amrSystem": {
+    "baseUrl": "http://192.168.1.100:7000",
+    "orderPath": "/ics/taskOrder/addTask",
+    "triggerPath": "/ics/out/task/continueTask",
+    "timeoutMs": 5000
+  },
+  "orderCommon": {
+    "modelProcessCode": "cong_test_trigger",
+    "priority": 6,
+    "fromSystem": "Thadosoft"
+  },
+  "lines": {
+    "line-a": {
+      "name": "Line A",
+      "orderLabel": "A",
+      "taskPath": "10000004,10000006,10000011,10000011",
+      "stations": {
+        "head": {
+          "code": "NGƯỜI 1",
+          "name": "Cấp Hàng",
+          "triggers": [
+            {
+              "id": "rotate",
+              "name": "AMR QUAY ĐẦU",
+              "triggerStation": "10000004"
+            },
+            {
+              "id": "supply",
+              "name": "ĐI CẤP HÀNG",
+              "triggerStation": "10000006"
+            }
+          ]
+        },
+        "tail": {
+          "code": "NGƯỜI 2",
+          "name": "Tháo Hàng",
+          "triggers": [
+            {
+              "id": "unload",
+              "name": "THÁO HÀNG XONG",
+              "triggerStation": "10000011"
+            }
+          ]
+        }
+      }
+    },
+    "line-b": {
+      "name": "Line B",
+      "orderLabel": "B",
+      "taskPath": "20000007,20000008,20000006,20000006",
+      "stations": {
+        "head": {
+          "code": "NGƯỜI 1",
+          "name": "Cấp Hàng",
+          "triggers": [
+            {
+              "id": "rotate",
+              "name": "AMR QUAY ĐẦU",
+              "triggerStation": "20000007"
+            },
+            {
+              "id": "supply",
+              "name": "ĐI CẤP HÀNG",
+              "triggerStation": "20000008"
+            }
+          ]
+        },
+        "tail": {
+          "code": "NGƯỜI 2",
+          "name": "Tháo Hàng",
+          "triggers": [
+            {
+              "id": "unload",
+              "name": "THÁO HÀNG XONG",
+              "triggerStation": "20000006"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

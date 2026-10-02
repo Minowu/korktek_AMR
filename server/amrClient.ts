@@ -24,7 +24,11 @@ export interface AmrConfig {
         {
           code: string;
           name: string;
-          triggerStation: string;
+          triggers?: Array<{
+            id: string;
+            name: string;
+            triggerStation: string;
+          }>;
         }
       >;
     }

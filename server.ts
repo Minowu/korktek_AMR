@@ -361,7 +361,7 @@ async function startServer() {
         payload: triggerPayload,
         response: triggerResult.error,
         success: false,
-        message: `Trigger điểm ${stationConfig.triggerStation} thất bại: ${triggerResult.error}`,
+        message: `Trigger điểm ${triggerConfig.triggerStation} thất bại: ${triggerResult.error}`,
         durationMs: triggerResult.durationMs,
       });
 
@@ -369,7 +369,7 @@ async function startServer() {
         success: false,
         errorCode: 'TRIGGER_FAILED',
         message: triggerResult.error || 'Gửi Trigger thất bại.',
-        currentStation: stationConfig.triggerStation,
+        currentStation: triggerConfig.triggerStation,
         durationMs: triggerResult.durationMs,
       });
     }
@@ -381,15 +381,15 @@ async function startServer() {
       payload: triggerPayload,
       response: triggerResult.data,
       success: true,
-      message: `Kích hoạt Trigger điểm ${stationConfig.triggerStation} (${stationConfig.code}) thành công`,
+      message: `Kích hoạt Trigger điểm ${triggerConfig.triggerStation} (${stationConfig.code}) thành công`,
       durationMs: triggerResult.durationMs,
     });
 
     return res.json({
       success: true,
-      currentStation: stationConfig.triggerStation,
+      currentStation: triggerConfig.triggerStation,
       stationCode: stationConfig.code,
-      message: `Trigger điểm ${stationConfig.triggerStation} thành công.`,
+      message: `Trigger điểm ${triggerConfig.triggerStation} thành công.`,
       durationMs: triggerResult.durationMs,
       amrResponse: triggerResult.data,
     });
@@ -438,6 +438,11 @@ async function startServer() {
    * Webhook to receive status updates from RCS (Auto-reset line when completed)
    * Expected Payload: { orderId: "...", status: "COMPLETED" | "STARTED" | "FAILED" }
    */
+  app.post('/api/deviceInfo', (req, res) => {
+    console.log("Device Information", res);
+    const sendSuccess = () => res.json({ "code": 1000, "desc": "success" });
+    return sendSuccess();
+  });
   app.post('/api/rcs', (req, res) => {
     console.log(req.body);
     try {

@@ -1,6 +1,6 @@
 {
   "amrSystem": {
-    "baseUrl": "http://192.168.1.100:7000",
+    "baseUrl": "http://192.168.50.250:7000",
     "orderPath": "/ics/taskOrder/addTask",
     "triggerPath": "/ics/out/task/continueTask",
     "timeoutMs": 5000
@@ -12,9 +12,9 @@
   },
   "lines": {
     "line-a": {
-      "name": "Line A",
-      "orderLabel": "A",
-      "taskPath": "10000004,10000006,10000011,10000011",
+      "name": "Cấp liệu 1",
+      "orderLabel": "Liệu 1",
+      "taskPath": "10000017,10000099,10000139,10000139",
       "stations": {
         "head": {
           "code": "NGƯỜI 1",
@@ -23,12 +23,12 @@
             {
               "id": "rotate",
               "name": "AMR QUAY ĐẦU",
-              "triggerStation": "10000004"
+              "triggerStation": "10000017"
             },
             {
               "id": "supply",
               "name": "ĐI CẤP HÀNG",
-              "triggerStation": "10000006"
+              "triggerStation": "10000099"
             }
           ]
         },
@@ -39,16 +39,16 @@
             {
               "id": "unload",
               "name": "THÁO HÀNG XONG",
-              "triggerStation": "10000011"
+              "triggerStation": "10000139"
             }
           ]
         }
       }
     },
     "line-b": {
-      "name": "Line B",
-      "orderLabel": "B",
-      "taskPath": "20000007,20000008,20000006,20000006",
+      "name": "Cấp liệu 2",
+      "orderLabel": "liệu 2",
+      "taskPath": "10000096,10000095,10000139,10000139",
       "stations": {
         "head": {
           "code": "NGƯỜI 1",
@@ -57,12 +57,12 @@
             {
               "id": "rotate",
               "name": "AMR QUAY ĐẦU",
-              "triggerStation": "20000007"
+              "triggerStation": "10000096"
             },
             {
               "id": "supply",
               "name": "ĐI CẤP HÀNG",
-              "triggerStation": "20000008"
+              "triggerStation": "10000095"
             }
           ]
         },
@@ -73,7 +73,41 @@
             {
               "id": "unload",
               "name": "THÁO HÀNG XONG",
-              "triggerStation": "20000006"
+              "triggerStation": "10000139"
+            }
+          ]
+        }
+      }
+    },
+    "line-c": {
+      "name": "Cấp liệu 3",
+      "orderLabel": "liệu 3",
+      "taskPath": "10000096,10000095,10000139,10000139",
+      "stations": {
+        "head": {
+          "code": "NGƯỜI 1",
+          "name": "Cấp Hàng",
+          "triggers": [
+            {
+              "id": "rotate",
+              "name": "AMR QUAY ĐẦU",
+              "triggerStation": "10000096"
+            },
+            {
+              "id": "supply",
+              "name": "ĐI CẤP HÀNG",
+              "triggerStation": "10000095"
+            }
+          ]
+        },
+        "tail": {
+          "code": "NGƯỜI 2",
+          "name": "Tháo Hàng",
+          "triggers": [
+            {
+              "id": "unload",
+              "name": "THÁO HÀNG XONG",
+              "triggerStation": "10000139"
             }
           ]
         }

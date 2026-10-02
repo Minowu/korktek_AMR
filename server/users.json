@@ -7,17 +7,27 @@
     ]
   },
   {
-    "username": "worker_A1",
+    "username": "CVL1",
     "password": "123",
     "permissions": [
-      "/control/line-a/head"
+      "/control/line-a/head",
+      "/control/line-a/tail"
     ]
   },
   {
-    "username": "worker_a_dropoff",
+    "username": "CVL2",
     "password": "123",
     "permissions": [
-      "/control/line-a/tail"
+      "/control/line-b/head",
+      "/control/line-b/tail"
+    ]
+  },
+  {
+    "username": "CVL3",
+    "password": "123",
+    "permissions": [
+      "/control/line-c/head",
+      "/control/line-c/tail"
     ]
   }
 ]

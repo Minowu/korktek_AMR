@@ -44,7 +44,7 @@ export const StationControl: React.FC<StationControlProps> = ({
   // Modals
   const [showOrderConfirm, setShowOrderConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  
+
   // Trigger state
   const [pendingTriggerId, setPendingTriggerId] = useState<string | null>(null);
   const [activeTriggerId, setActiveTriggerId] = useState<string | null>(null);
@@ -306,36 +306,26 @@ export const StationControl: React.FC<StationControlProps> = ({
             <div className="text-right">
               <span
                 id="line-status-badge"
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs ${
-                  isLinePending
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs ${isLinePending
                     ? 'bg-amber-100 text-amber-700 border border-amber-300 animate-pulse'
                     : isLineRunning
-                    ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
-                    : 'bg-main text-white border border-main'
-                }`}
+                      ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
+                      : 'bg-main text-white border border-main'
+                  }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${
-                    isLinePending ? 'bg-amber-500'
-                    : isLineRunning ? 'bg-accent'
-                    : 'bg-emerald-400'
-                  }`}
+                  className={`w-2 h-2 rounded-full ${isLinePending ? 'bg-amber-500'
+                      : isLineRunning ? 'bg-accent'
+                        : 'bg-emerald-400'
+                    }`}
                 />
-                {isLinePending ? 'ĐANG CHỜ RCS...' : isLineRunning ? 'ĐANG CHẠY' : 'SẴN SÀNG'}
+                {isLinePending ? 'ĐANG CHỜ RCS...' : isLineRunning ? 'ĐÃ NHẬN LỆNH' : 'SẴN SÀNG'}
               </span>
               {isLineRunning && lineState?.currentOrderId && (
                 <div className="text-[10px] text-amber-700 font-mono mt-1 truncate max-w-[150px]">
                   {lineState.currentOrderId}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Config Parameters Display */}
-          <div className="mt-3 pt-3 border-t border-slate-200/80 grid grid-cols-1 gap-2 text-xs">
-            <div className="bg-white/70 p-2 rounded-lg border border-slate-200 flex items-center justify-between">
-              <span className="text-slate-600 font-medium">Chu trình tổng:</span>
-              <span className="text-slate-800 font-bold bg-slate-200/50 px-2 py-0.5 rounded">{config.orderLabel}</span>
             </div>
           </div>
         </div>
@@ -382,13 +372,12 @@ export const StationControl: React.FC<StationControlProps> = ({
             type="button"
             disabled={isLineBusy || isOrdering}
             onClick={() => setShowOrderConfirm(true)}
-            className={`w-full min-h-[78px] px-6 py-4 rounded-2xl font-black text-xl tracking-wide uppercase transition-all duration-150 flex flex-col items-center justify-center gap-1 shadow-xl border-2 ${
-              isLinePending || isOrdering
+            className={`w-full min-h-[78px] px-6 py-4 rounded-2xl font-black text-xl tracking-wide uppercase transition-all duration-150 flex flex-col items-center justify-center gap-1 shadow-xl border-2 ${isLinePending || isOrdering
                 ? 'bg-amber-100/90 text-amber-600 border-amber-300 cursor-wait shadow-none'
                 : isLineRunning
-                ? 'bg-slate-100/90 text-slate-500 border-slate-300 cursor-not-allowed shadow-none'
-                : 'bg-main hover:opacity-90 active:scale-[0.98] text-white border-main/50 hover:border-main'
-            }`}
+                  ? 'bg-slate-100/90 text-slate-500 border-slate-300 cursor-not-allowed shadow-none'
+                  : 'bg-main hover:opacity-90 active:scale-[0.98] text-white border-main/50 hover:border-main'
+              }`}
           >
             <div className="flex items-center gap-2">
               {isLinePending || isOrdering ? (
@@ -404,8 +393,8 @@ export const StationControl: React.FC<StationControlProps> = ({
               {isLinePending || isOrdering
                 ? 'Hệ thống đang chờ RCS phản hồi...'
                 : isLineRunning
-                ? 'Nút bị khóa vì Line đang chạy lệnh'
-                : 'Yêu cầu AMR đến lấy hàng'}
+                  ? 'Nút bị khóa vì Line đang chạy lệnh'
+                  : 'Yêu cầu AMR đến lấy hàng'}
             </span>
           </button>
         </div>
@@ -413,10 +402,10 @@ export const StationControl: React.FC<StationControlProps> = ({
         {/* ACTION 2: DYNAMIC TRIGGERS */}
         {config.triggers?.map((t) => {
           const isThisTriggering = isTriggering && activeTriggerId === t.id;
-          
+
           let bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-300';
           let TriggerIcon = Zap;
-          
+
           if (t.id === 'rotate') {
             bgColor = 'bg-amber-500 hover:bg-amber-600 border-amber-400/50 hover:border-amber-400';
             TriggerIcon = Undo2;
@@ -457,10 +446,7 @@ export const StationControl: React.FC<StationControlProps> = ({
       {/* 4. UTILITY / RESET ACTION (Decision 1 - Option A) */}
       <div className="pt-3 border-t border-slate-200/80 space-y-2">
         <div className="flex items-center justify-between text-xs text-slate-600 px-1">
-          <span>Quản trị Line:</span>
-          <span className="font-mono">
-            Line {config.lineName.replace('Line ', '')} ({isLineRunning ? 'Locked' : 'Idle'})
-          </span>
+          <span className="text-red-500 font-bold">Lưu ý chỉ dành trong trường hợp đặc biệt :</span>
         </div>
 
         <button

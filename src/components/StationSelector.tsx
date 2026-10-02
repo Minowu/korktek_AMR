@@ -107,27 +107,23 @@ export const StationSelector: React.FC<StationSelectorProps> = ({
               {/* Line Header */}
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
-                    {line.name.replace('Line ', '')}
-                  </div>
                   <div>
                     <h2 className="font-bold text-slate-900 text-base leading-tight">
                       {line.name}
                     </h2>
                     <span className="text-[11px] text-slate-600">
-                      Lệnh: {line.orderLabel}
+                      {line.orderLabel}
                     </span>
                   </div>
                 </div>
 
                 <span
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                    isPending
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${isPending
                       ? 'bg-amber-100 text-amber-700 border border-amber-300 animate-pulse'
                       : isRunning
-                      ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
-                      : 'bg-main text-white border border-main'
-                  }`}
+                        ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
+                        : 'bg-main text-white border border-main'
+                    }`}
                 >
                   {isPending ? 'Đang chờ...' : isRunning ? 'Đang chạy' : 'Sẵn sàng'}
                 </span>

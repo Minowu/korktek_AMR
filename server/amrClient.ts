@@ -125,7 +125,7 @@ class AmrClientService {
         };
       }
 
-      if (resJson && resJson.code != 1000 && resJson.code != 1001) {
+      if (resJson && resJson.code != 1000) {
         return {
           success: false,
           error: `AMR System từ chối lệnh (code: ${resJson.code}): ${resJson.desc || resJson.msg || JSON.stringify(resJson)}`,
@@ -179,6 +179,7 @@ class AmrClientService {
       const response = await fetch(targetUrl, {
         method: 'POST',
         headers: {
+          'Accept-Language': 'en-US',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -212,10 +213,18 @@ class AmrClientService {
         };
       }
 
-      if (resJson && resJson.code < 1000) {
+      if (resJson && resJson.code != 1000) {
+        if (resJson.code == 4201) {
+          return {
+            success: false,
+            error: 'AMR chưa đến điểm kích hoạt, xin vui lòng thử bấm lại sau',
+            httpStatus: response.status,
+            durationMs,
+          }
+        }
         return {
           success: false,
-          error: `AMR System từ chối lệnh Trigger (code: ${resJson.code}): ${resJson.desc || resJson.msg || JSON.stringify(resJson)}`,
+          error: `AMR từ chối lệnh Trigger (code: ${resJson.code}): ${resJson.desc || resJson.msg || JSON.stringify(resJson)}`,
           httpStatus: response.status,
           durationMs,
         };

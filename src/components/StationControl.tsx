@@ -17,12 +17,14 @@ import {
   PackagePlus,
   PackageMinus,
 } from 'lucide-react';
+import AMRStatusBoard from './AMRStatusBoard';
 
 interface StationControlProps {
   lineKey: string;
   stationKey: string;
   onNavigateHome: () => void;
   onOpenLogs: () => void;
+  isAdmin?: boolean;
 }
 
 export const StationControl: React.FC<StationControlProps> = ({
@@ -30,6 +32,7 @@ export const StationControl: React.FC<StationControlProps> = ({
   stationKey,
   onNavigateHome,
   onOpenLogs,
+  isAdmin = false,
 }) => {
   const [config, setConfig] = useState<StationConfig | null>(null);
   const [lineState, setLineState] = useState<LineState | null>(null);
@@ -255,15 +258,17 @@ export const StationControl: React.FC<StationControlProps> = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
           <div className="flex items-center gap-2 text-xs">
-            <button
-              id="open-logs-btn"
-              onClick={onOpenLogs}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-primary font-mono"
-              title="Xem nhật ký giao tiếp"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Logs</span>
-            </button>
+            {isAdmin && (
+              <button
+                id="open-logs-btn"
+                onClick={onOpenLogs}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-primary font-mono"
+                title="Xem nhật ký giao tiếp"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Logs</span>
+              </button>
+            )}
 
             <span
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold ${isOnline
@@ -361,6 +366,11 @@ export const StationControl: React.FC<StationControlProps> = ({
             </button>
           </div>
         )}
+      </div>
+
+      {/* AMR Status Board Component placed inside the PDA control */}
+      <div className="mt-4">
+        <AMRStatusBoard />
       </div>
 
       {/* 3. PRIMARY ACTION BUTTONS (PDA Optimized Vertical Stack) */}

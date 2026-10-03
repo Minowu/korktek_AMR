@@ -15,11 +15,15 @@ import {
 interface StationSelectorProps {
   onSelectStation: (lineKey: string, stationKey: string) => void;
   onOpenLogs: () => void;
+  isAdmin?: boolean;
+  permissions?: string[];
 }
 
 export const StationSelector: React.FC<StationSelectorProps> = ({
   onSelectStation,
   onOpenLogs,
+  isAdmin = false,
+  permissions = [],
 }) => {
   const [config, setConfig] = useState<AllLinesConfig | null>(null);
   const [states, setStates] = useState<Record<string, LineState>>({});
@@ -82,19 +86,29 @@ export const StationSelector: React.FC<StationSelectorProps> = ({
           <span>Làm mới trạng thái</span>
         </button>
 
-        <button
-          id="selector-logs-btn"
-          onClick={onOpenLogs}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-primary rounded-lg text-xs font-medium"
-        >
-          <Terminal className="w-3.5 h-3.5" />
-          <span>Nhật ký giao tiếp</span>
-        </button>
+        {isAdmin && (
+          <button
+            id="selector-logs-btn"
+            onClick={onOpenLogs}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-primary rounded-lg text-xs font-medium"
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>Nhật ký giao tiếp</span>
+          </button>
+        )}
       </div>
 
       {/* Station List Cards */}
       <div className="space-y-4">
         {config?.lines.map((line) => {
+          const allowedStations = line.stations.filter(station => {
+            if (isAdmin) return true;
+            const path = `/control/${line.key}/${station.key}`;
+            return permissions.some(p => path === p || path.startsWith(p) || p === `*` || p === `/control/${line.key}/*`);
+          });
+
+          if (allowedStations.length === 0) return null;
+
           const lineStatus = states[line.key]?.status || 'idle';
           const isRunning = lineStatus === 'running';
           const isPending = lineStatus === 'pending';
@@ -131,7 +145,7 @@ export const StationSelector: React.FC<StationSelectorProps> = ({
 
               {/* Stations Grid */}
               <div className="grid grid-cols-2 gap-2.5">
-                {line.stations.map((station) => (
+                {allowedStations.map((station) => (
                   <button
                     key={station.key}
                     id={`select-station-${station.code.toLowerCase()}`}

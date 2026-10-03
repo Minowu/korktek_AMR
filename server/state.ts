@@ -8,6 +8,26 @@ export interface LineState {
   lockedByStation: string | null;
 }
 
+export interface DeviceInfo {
+  deviceCode: string;
+  deviceName: string;
+  state: string;
+  deviceStatus: number; // 0: Offline, 1: Idle, 2: Fault, 4: In task, 5: Charging, 7: Upgrading
+  battery: string;
+  taskPath: string;
+  orderId: string;
+  shelfNum: string;
+  devicePosition: string;
+  lastUpdated: string;
+  currentTaskStep?: string; // Tên bước hiện tại từ /api/rcs
+  subTaskSeq?: string;      // 0, 1, 2, 3 từ /api/rcs
+  currentAlarm?: {
+    type: number;
+    text: string;
+    desc: string;
+  };
+}
+
 export interface ActivityLog {
   id: string;
   timestamp: string;
@@ -23,6 +43,8 @@ export interface ActivityLog {
 }
 
 class SystemStateManager {
+  private devices: Record<string, DeviceInfo> = {};
+
   private lineStates: Record<string, LineState> = {
     'line-a': {
       status: 'idle',
@@ -42,6 +64,93 @@ class SystemStateManager {
   private logs: ActivityLog[] = [];
   private maxLogs = 50;
   private logFilePath = path.join(process.cwd(), 'amr_activity_logs.jsonl');
+
+  public updateDevicesInfo(dataArray: any[]) {
+    const now = new Date().toISOString();
+    for (const item of dataArray) {
+      const code = item.deviceCode;
+      if (code) {
+        this.devices[code] = {
+          ...this.devices[code], // Giữ lại thông tin cũ (như currentTaskStep, subTaskSeq)
+          ...item,
+          lastUpdated: now
+        };
+      }
+    }
+  }
+
+  public updateDeviceTaskStep(deviceCode: string, subTaskSeq: string, stepName: string, orderId: string) {
+    if (this.devices[deviceCode]) {
+      this.devices[deviceCode].subTaskSeq = subTaskSeq;
+      this.devices[deviceCode].currentTaskStep = stepName;
+      this.devices[deviceCode].orderId = orderId;
+      this.devices[deviceCode].lastUpdated = new Date().toISOString();
+    } else {
+      // Nếu chưa có thông tin từ deviceInfo, tạo tạm
+      this.devices[deviceCode] = {
+        deviceCode,
+        deviceName: deviceCode, // Tạm thời
+        state: 'InTask',
+        deviceStatus: 4,
+        battery: '--',
+        taskPath: '',
+        orderId: orderId,
+        shelfNum: '',
+        devicePosition: '',
+        subTaskSeq,
+        currentTaskStep: stepName,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  public updateDeviceAlarm(deviceIdentifier: string, alarmType: number, alarmText: string, alarmDesc: string) {
+    // Thử tìm theo deviceCode hoặc deviceName hoặc thiết bị đang có
+    let targetDeviceCode = deviceIdentifier;
+    
+    if (!this.devices[targetDeviceCode]) {
+      // Thử tìm xem có xe nào trùng deviceName không
+      for (const code in this.devices) {
+        if (this.devices[code].deviceName === deviceIdentifier || code.includes(deviceIdentifier)) {
+          targetDeviceCode = code;
+          break;
+        }
+      }
+    }
+
+    if (this.devices[targetDeviceCode]) {
+      // Nếu alarmType = 0 hoặc cờ nào đó báo clear, ta có thể xóa (tạm thời ghi đè)
+      this.devices[targetDeviceCode].currentAlarm = {
+        type: alarmType,
+        text: alarmText,
+        desc: alarmDesc
+      };
+      this.devices[targetDeviceCode].lastUpdated = new Date().toISOString();
+    } else {
+       // Tạo mới nếu chưa có
+       this.devices[deviceIdentifier] = {
+        deviceCode: deviceIdentifier,
+        deviceName: deviceIdentifier,
+        state: 'Fault',
+        deviceStatus: 2, // 2: Fault
+        battery: '--',
+        taskPath: '',
+        orderId: '',
+        shelfNum: '',
+        devicePosition: '',
+        lastUpdated: new Date().toISOString(),
+        currentAlarm: {
+          type: alarmType,
+          text: alarmText,
+          desc: alarmDesc
+        }
+      };
+    }
+  }
+
+  public getAllDevices(): DeviceInfo[] {
+    return Object.values(this.devices);
+  }
 
   public generateUniqueOrderId(prefix: string = 'cong'): string {
     let now = Date.now();

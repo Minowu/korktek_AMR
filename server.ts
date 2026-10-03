@@ -436,17 +436,24 @@ async function startServer() {
   /**
    * POST /api/webhook/rcs
    * Webhook to receive status updates from RCS (Auto-reset line when completed)
-   * Expected Payload: { orderId: "...", status: "COMPLETED" | "STARTED" | "FAILED" }
    */
   app.post('/api/deviceInfo', (req, res) => {
-    console.log("Device Information", res);
-    const sendSuccess = () => res.json({ "code": 1000, "desc": "success" });
-    return sendSuccess();
-  });
-  app.post('/api/rcs', (req, res) => {
-    console.log(req.body);
     try {
-      const { orderId, status, errorDesc } = req.body || {};
+      const data = req.body;
+      if (data && Array.isArray(data)) {
+        stateManager.updateDevicesInfo(data);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    return res.json({ "code": 1000, "desc": "success" });
+  });
+
+  app.post('/api/rcs', (req, res) => {
+    try {
+      // API gửi dạng { at: '...', payload: { ... } }
+      const payload = req.body?.payload || req.body || {};
+      const { orderId, status, deviceCode, subTaskSeq } = payload;
 
       const sendSuccess = () => res.json({ "code": 1000, "desc": "success" });
 
@@ -454,6 +461,7 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "Thiếu orderId" });
       }
 
+      // 1. Tìm xem orderId này thuộc Line nào
       const allStates = stateManager.getAllStates();
       let targetLine: string | null = null;
 
@@ -464,46 +472,66 @@ async function startServer() {
         }
       }
 
-      if (!targetLine) {
-        return res.status(404).json({ success: false, message: "Không tìm thấy line đang chạy lệnh này" });
+      // 2. Cập nhật tiến độ subTask nếu có
+      if (deviceCode && subTaskSeq !== undefined) {
+        let statusPrefix = "";
+        if (payload.subTaskStatus === "2" || payload.subTaskStatus === 2) statusPrefix = "[Đang làm] ";
+        if (payload.subTaskStatus === "3" || payload.subTaskStatus === 3) statusPrefix = "[Hoàn thành] ";
+
+        const stepMapping: Record<string, string> = {
+          "0": "Bắt đầu đi đến điểm lấy hàng",
+          "1": "Đang móc hàng",
+          "2": "Đang đi đến chỗ cấp hàng",
+          "3": "Xác định móc hàng xong"
+        };
+
+        let stepName = statusPrefix + (stepMapping[String(subTaskSeq)] || `Xử lý bước ${subTaskSeq}`);
+        if (targetLine) {
+          stepName += ` cho ${targetLine.replace('-', ' ').toUpperCase()}`;
+        }
+
+        stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId);
       }
 
-      if (status == 8) {
-        stateManager.resetLine(targetLine);
-        stateManager.addLog({
-          type: 'ORDER',
-          line: targetLine,
-          orderId: orderId,
-          success: true,
-          message: `[WEBHOOK] RCS báo hoàn thành lệnh ${orderId}. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
-        });
-      } else if (status == 3) {
-        stateManager.resetLine(targetLine);
-        stateManager.addLog({
-          type: 'ORDER',
-          line: targetLine,
-          orderId: orderId,
-          success: true,
-          message: `[WEBHOOK] RCS báo lệnh ${orderId} đã huỷ. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
-        });
-      } else if (status == 5) {
-        stateManager.resetLine(targetLine);
-        stateManager.addLog({
-          type: 'ORDER',
-          line: targetLine,
-          orderId: orderId,
-          success: true,
-          message: `[WEBHOOK] RCS báo lệnh ${orderId} failed do ${errorDesc}. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
-        });
-      } else {
-        // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line
-        stateManager.addLog({
-          type: 'ORDER',
-          line: targetLine,
-          orderId: orderId,
-          success: true,
-          message: `[WEBHOOK] RCS cập nhật lệnh ${orderId} với trạng thái: ${status}`
-        });
+      // 3. Logic xử lý trạng thái tổng thể của order (Mở khoá line)
+      if (targetLine) {
+        if (status == 8) {
+          stateManager.resetLine(targetLine);
+          stateManager.addLog({
+            type: 'ORDER',
+            line: targetLine,
+            orderId: orderId,
+            success: true,
+            message: `[WEBHOOK] RCS báo hoàn thành lệnh ${orderId}. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+          });
+        } else if (status == 3) {
+          stateManager.resetLine(targetLine);
+          stateManager.addLog({
+            type: 'ORDER',
+            line: targetLine,
+            orderId: orderId,
+            success: true,
+            message: `[WEBHOOK] RCS báo lệnh ${orderId} đã huỷ. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+          });
+        } else if (status == 5) {
+          stateManager.resetLine(targetLine);
+          stateManager.addLog({
+            type: 'ORDER',
+            line: targetLine,
+            orderId: orderId,
+            success: true,
+            message: `[WEBHOOK] RCS báo lệnh ${orderId} failed. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+          });
+        } else {
+          // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line
+          stateManager.addLog({
+            type: 'ORDER',
+            line: targetLine,
+            orderId: orderId,
+            success: true,
+            message: `[WEBHOOK] RCS cập nhật lệnh ${orderId} với trạng thái: ${status}`
+          });
+        }
       }
 
       // Luôn trả về 1000 cho RCS
@@ -512,6 +540,74 @@ async function startServer() {
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
     }
+  });
+
+  /**
+   * POST /api/alarm
+   * Webhook to receive alarm updates (e.g. obstacle alert)
+   */
+  app.post('/api/alarm', (req, res) => {
+    console.log(req.body)
+    try {
+      const payload = req.body || {};
+      const { deviceName, deviceNum, channelDeviceId, alarmType, alarmDesc } = payload;
+
+      const alarmMapping: Record<number, string> = {
+        1: "Mất kết nối thiết bị",
+        2: "Lỗi thiết bị",
+        3: "Cảnh báo pin yếu",
+        4: "Lỗi hệ thống AMR",
+        5: "Lỗi cập nhật phần mềm",
+        6: "Lỗi trạm (Node)",
+        8: "Lỗi điều hướng",
+        11: "Lỗi cập nhật bản đồ",
+        12: "Phát hiện vật cản",
+        15: "Nhiệt độ quá cao",
+        20: "Lỗi cột sạc",
+        21: "Lỗi quá trình sạc",
+        22: "Lỗi kệ hàng",
+        23: "Đường đi bất thường",
+        24: "Lỗi cấu hình",
+        25: "Tải trọng bất thường",
+        26: "Lỗi thùng hàng",
+        28: "Va chạm AGV",
+        29: "Lỗi cảm biến Laser",
+        30: "Hàng hóa quá cao",
+        31: "Lỗi thay thế thiết bị",
+        40: "Lỗi đầu đọc RFID",
+        41: "Lỗi hệ thống cửa kiểm soát",
+        42: "Lỗi điều khiển thang máy",
+        43: "Lỗi cảm biến thùng hàng",
+        44: "Lỗi Camera thông minh",
+        45: "Đang chờ xác nhận",
+        46: "Lỗi dịch vụ (Service exception)",
+        48: "Lỗi máy nhắn tin",
+        49: "Lỗi đèn báo công nghiệp",
+        50: "Lỗi nhận dạng"
+      };
+
+      const identifier = channelDeviceId || deviceNum || deviceName;
+      if (identifier && alarmType !== undefined) {
+        const alarmText = alarmMapping[alarmType] || `Unknown Alarm (${alarmType})`;
+        stateManager.updateDeviceAlarm(identifier, alarmType, alarmText, alarmDesc || "");
+      }
+
+      return res.json({ "code": 1000, "desc": "success" });
+    } catch (err: any) {
+      console.error(err);
+      return res.json({ "code": 1000, "desc": "success" });
+    }
+  });
+
+  /**
+   * GET /api/devices
+   * Returns current states of all AMRs
+   */
+  app.get('/api/devices', (req, res) => {
+    res.json({
+      success: true,
+      data: stateManager.getAllDevices(),
+    });
   });
 
   /**

@@ -13,6 +13,7 @@ const StationControl = lazy(() => import('./components/StationControl').then(m =
 const StationSelector = lazy(() => import('./components/StationSelector').then(m => ({ default: m.StationSelector })));
 const MultiPdaView = lazy(() => import('./components/MultiPdaView').then(m => ({ default: m.MultiPdaView })));
 const LogsDrawer = lazy(() => import('./components/LogsDrawer').then(m => ({ default: m.LogsDrawer })));
+const AMRStatusBoard = lazy(() => import('./components/AMRStatusBoard'));
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
@@ -127,19 +128,21 @@ export default function App() {
               <span className="hidden xs:inline">PDA Trạm</span>
             </button>
 
-            <button
-              onClick={() => {
-                setViewMode('simulator');
-                navigateTo('/');
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-medium transition-colors ${viewMode === 'simulator'
-                ? 'bg-slate-100 text-primary border border-slate-300'
-                : 'text-slate-600 hover:text-slate-800'
-                }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Mô phỏng Đa PDA</span>
-            </button>
+            {user?.permissions.includes('*') && (
+              <button
+                onClick={() => {
+                  setViewMode('simulator');
+                  navigateTo('/');
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-medium transition-colors ${viewMode === 'simulator'
+                  ? 'bg-slate-100 text-primary border border-slate-300'
+                  : 'text-slate-600 hover:text-slate-800'
+                  }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Mô phỏng Đa PDA</span>
+              </button>
+            )}
 
             <button
               onClick={handleLogout}
@@ -175,15 +178,24 @@ export default function App() {
                 stationKey={routeInfo.stationKey}
                 onNavigateHome={() => navigateTo('/')}
                 onOpenLogs={() => setIsLogsOpen(true)}
+                isAdmin={user.permissions.includes('*')}
               />
             )
           ) : (
-            <StationSelector
-              onSelectStation={(line, station) => {
-                navigateTo(`/control/${line}/${station}`);
-              }}
-              onOpenLogs={() => setIsLogsOpen(true)}
-            />
+            <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto">
+              <StationSelector
+                onSelectStation={(line, station) => {
+                  navigateTo(`/control/${line}/${station}`);
+                }}
+                onOpenLogs={() => setIsLogsOpen(true)}
+                isAdmin={user.permissions.includes('*')}
+                permissions={user.permissions}
+              />
+              <div className="mt-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-4 px-2">Trạng thái AMR Toàn Hệ Thống</h2>
+                <AMRStatusBoard />
+              </div>
+            </div>
           )}
         </Suspense>
       </main>

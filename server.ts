@@ -438,6 +438,8 @@ async function startServer() {
    * Webhook to receive status updates from RCS (Auto-reset line when completed)
    */
   app.post('/api/deviceInfo', (req, res) => {
+    console.log('\n[WEBHOOK] /api/deviceInfo RAW PAYLOAD:');
+    console.log(JSON.stringify(req.body, null, 2));
     try {
       const data = req.body;
       if (data && Array.isArray(data)) {
@@ -449,7 +451,9 @@ async function startServer() {
     return res.json({ "code": 1000, "desc": "success" });
   });
 
-  app.post('/api/rcs', (req, res) => {
+  app.all('/api/rcs', (req, res) => {
+    console.log('\n[WEBHOOK] /api/rcs RAW PAYLOAD:');
+    console.log(JSON.stringify(req.body, null, 2));
     try {
       // API gửi dạng { at: '...', payload: { ... } }
       const payload = req.body?.payload || req.body || {};
@@ -547,7 +551,8 @@ async function startServer() {
    * Webhook to receive alarm updates (e.g. obstacle alert)
    */
   app.post('/api/alarm', (req, res) => {
-    console.log(req.body)
+    console.log('\n[WEBHOOK] /api/alarm RAW PAYLOAD:');
+    console.log(JSON.stringify(req.body, null, 2));
     try {
       const payload = req.body || {};
       const { deviceName, deviceNum, channelDeviceId, alarmType, alarmDesc } = payload;
@@ -586,7 +591,7 @@ async function startServer() {
         50: "Lỗi nhận dạng"
       };
 
-      const identifier = channelDeviceId || deviceNum || deviceName;
+      const identifier = deviceNum;
       if (identifier && alarmType !== undefined) {
         const alarmText = alarmMapping[alarmType] || `Unknown Alarm (${alarmType})`;
         stateManager.updateDeviceAlarm(identifier, alarmType, alarmText, alarmDesc || "");
@@ -596,6 +601,22 @@ async function startServer() {
     } catch (err: any) {
       console.error(err);
       return res.json({ "code": 1000, "desc": "success" });
+    }
+  });
+
+  /**
+   * POST /api/alarm/clear
+   * Clear an alarm manually from the UI
+   */
+  app.post('/api/alarm/clear', (req, res) => {
+    try {
+      const { deviceCode } = req.body;
+      if (deviceCode) {
+        stateManager.clearDeviceAlarm(deviceCode);
+      }
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
     }
   });
 

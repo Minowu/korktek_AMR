@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Battery, AlertTriangle, PowerOff } from 'lucide-react';
+import { Activity, Battery, AlertTriangle, PowerOff, X } from 'lucide-react';
 
 const STATUS_MAP: Record<number, { text: string, color: string, icon: any }> = {
   0: { text: 'Ngoại tuyến', color: 'bg-gray-200 text-gray-500', icon: PowerOff },
@@ -30,6 +30,22 @@ export default function AMRStatusBoard() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleClearAlarm = async (deviceCode: string) => {
+    try {
+      await fetch('/api/alarm/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceCode })
+      });
+      // Fetch ngay để update giao diện nhanh hơn không cần chờ 2s
+      const res = await fetch('/api/devices');
+      const json = await res.json();
+      if (json.success) setDevices(json.data);
+    } catch (error) {
+      console.error("Failed to clear alarm", error);
+    }
+  };
+
   if (devices.length === 0) {
     return (
       <div className="p-4 text-xs py-2 text-gray-500 text-center border border-dashed rounded-lg">
@@ -58,8 +74,17 @@ export default function AMRStatusBoard() {
                   <span className="text-xs text-slate-500 font-medium flex items-center gap-1"><Battery size={14} /> {device.battery}%</span>
                 </div>
                 {device.currentAlarm && device.currentAlarm.type !== 0 ? (
-                  <div className="text-xs text-red-600 font-bold mt-0.5 truncate flex items-center gap-1" title={device.currentAlarm.desc}>
-                    <AlertTriangle size={12} /> LỖI: {device.currentAlarm.text}
+                  <div className="text-xs text-red-600 font-bold mt-0.5 flex items-center justify-between gap-1" title={device.currentAlarm.desc}>
+                    <div className="flex items-center gap-1 truncate">
+                      <AlertTriangle size={12} className="shrink-0" /> <span className="truncate">LỖI: {device.currentAlarm.text}</span>
+                    </div>
+                    <button 
+                      onClick={() => handleClearAlarm(device.deviceCode)}
+                      className="text-slate-400 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded p-1 transition-colors shrink-0" 
+                      title="Bỏ qua cảnh báo này"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
                 ) : isBusy && device.currentTaskStep ? (
                   <div className="text-xs text-blue-600 truncate font-medium mt-0.5" title={device.currentTaskStep}>

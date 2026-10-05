@@ -73,21 +73,7 @@ class SystemStateManager {
       this.devices[deviceCode].orderId = orderId;
       this.devices[deviceCode].lastUpdated = new Date().toISOString();
     } else {
-      // Nếu chưa có thông tin từ deviceInfo, tạo tạm
-      this.devices[deviceCode] = {
-        deviceCode,
-        deviceName: deviceCode, // Tạm thời
-        state: 'InTask',
-        deviceStatus: 4,
-        battery: '--',
-        taskPath: '',
-        orderId: orderId,
-        shelfNum: '',
-        devicePosition: '',
-        subTaskSeq,
-        currentTaskStep: stepName,
-        lastUpdated: new Date().toISOString()
-      };
+      console.warn(`[WARNING] Bỏ qua cập nhật tiến độ (RCS) cho thiết bị không xác định: ${deviceCode}`);
     }
   }
 
@@ -114,24 +100,13 @@ class SystemStateManager {
       };
       this.devices[targetDeviceCode].lastUpdated = new Date().toISOString();
     } else {
-       // Tạo mới nếu chưa có
-       this.devices[deviceIdentifier] = {
-        deviceCode: deviceIdentifier,
-        deviceName: deviceIdentifier,
-        state: 'Fault',
-        deviceStatus: 2, // 2: Fault
-        battery: '--',
-        taskPath: '',
-        orderId: '',
-        shelfNum: '',
-        devicePosition: '',
-        lastUpdated: new Date().toISOString(),
-        currentAlarm: {
-          type: alarmType,
-          text: alarmText,
-          desc: alarmDesc
-        }
-      };
+      console.warn(`[WARNING] Bỏ qua cảnh báo cho thiết bị không xác định: ${deviceIdentifier}`);
+    }
+  }
+
+  public clearDeviceAlarm(deviceCode: string) {
+    if (this.devices[deviceCode]) {
+      this.devices[deviceCode].currentAlarm = undefined;
     }
   }
 

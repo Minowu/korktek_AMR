@@ -45,20 +45,7 @@ export interface ActivityLog {
 class SystemStateManager {
   private devices: Record<string, DeviceInfo> = {};
 
-  private lineStates: Record<string, LineState> = {
-    'line-a': {
-      status: 'idle',
-      currentOrderId: null,
-      lockedAt: null,
-      lockedByStation: null,
-    },
-    'line-b': {
-      status: 'idle',
-      currentOrderId: null,
-      lockedAt: null,
-      lockedByStation: null,
-    },
-  };
+  private lineStates: Record<string, LineState> = {};
 
   private lastTimestampMs = 0;
   private logs: ActivityLog[] = [];
@@ -184,9 +171,15 @@ class SystemStateManager {
   }
 
   public lockLinePending(lineKey: string, stationKey: string, orderId: string): { success: boolean; error?: string } {
-    const current = this.lineStates[lineKey];
+    let current = this.lineStates[lineKey];
     if (!current) {
-      return { success: false, error: `Line '${lineKey}' không tồn tại trong cấu hình hệ thống.` };
+      current = {
+        status: 'idle',
+        currentOrderId: null,
+        lockedAt: null,
+        lockedByStation: null,
+      };
+      this.lineStates[lineKey] = current;
     }
 
     if (current.status !== 'idle') {
@@ -222,7 +215,13 @@ class SystemStateManager {
 
   public resetLine(lineKey: string): { success: boolean; message: string } {
     if (!this.lineStates[lineKey]) {
-      return { success: false, message: `Line '${lineKey}' không tồn tại.` };
+      this.lineStates[lineKey] = {
+        status: 'idle',
+        currentOrderId: null,
+        lockedAt: null,
+        lockedByStation: null,
+      };
+      return { success: true, message: `Line '${lineKey}' đã được thiết lập về trạng thái IDLE.` };
     }
 
     const previousOrderId = this.lineStates[lineKey].currentOrderId;

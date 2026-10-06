@@ -116,7 +116,7 @@ export default function App() {
               onClick={() => {
                 setViewMode('single');
                 if (!routeInfo.isStationRoute) {
-                  navigateTo('/control/line-a/pickup');
+                  navigateTo('/control/line-a/head');
                 }
               }}
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-medium transition-colors ${viewMode === 'single'

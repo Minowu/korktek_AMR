@@ -484,9 +484,11 @@ async function startServer() {
 
         const stepMapping: Record<string, string> = {
           "0": "Bắt đầu đi đến điểm lấy hàng",
-          "1": "Đang móc hàng",
+          "1": "Đang quay xe để móc hàng",
           "2": "Đang đi đến chỗ cấp hàng",
-          "3": "Xác định móc hàng xong"
+          "3": "Quay xe để móc hàng",
+          "4": "Xe đã đến điểm trả hàng",
+          "5": "Hoàn tất tháo hàng"
         };
 
         let stepName = statusPrefix + (stepMapping[String(subTaskSeq)] || `Xử lý bước ${subTaskSeq}`);

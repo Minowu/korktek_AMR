@@ -8,6 +8,11 @@ export interface StationTrigger {
   id: string;
   name: string;
   triggerStation: string;
+  color?: string;
+  icon?: string;
+  modalTitle?: string;
+  modalMessage?: string;
+  modalVariant?: 'primary' | 'warning' | 'danger';
 }
 
 export interface StationConfig {

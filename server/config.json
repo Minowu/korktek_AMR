@@ -14,7 +14,7 @@
     "line-a": {
       "name": "Cấp liệu 1",
       "orderLabel": "Liệu 1",
-      "taskPath": "10000017,10000099,10000139,10000139",
+      "taskPath": "10000010,10000005,10000014,10000014",
       "stations": {
         "head": {
           "code": "NGƯỜI 1",
@@ -23,12 +23,18 @@
             {
               "id": "rotate",
               "name": "AMR QUAY ĐẦU",
-              "triggerStation": "10000017"
+              "triggerStation": "10000010",
+              "modalTitle": "XÁC NHẬN AMR QUAY ĐẦU",
+              "modalMessage": "Xác nhận xe AMR đã dừng đúng vị trí trạm cấp và khu vực xung quanh an toàn để xe quay đầu?",
+              "modalVariant": "warning"
             },
             {
               "id": "supply",
               "name": "ĐI CẤP HÀNG",
-              "triggerStation": "10000099"
+              "triggerStation": "10000005",
+              "modalTitle": "XÁC NHẬN ĐI CẤP HÀNG",
+              "modalMessage": "Xác nhận đã cấp hàng lên xe chắc chắn và cho phép AMR bắt đầu di chuyển đến trạm tháo hàng?",
+              "modalVariant": "primary"
             }
           ]
         },
@@ -39,7 +45,18 @@
             {
               "id": "unload",
               "name": "THÁO HÀNG XONG",
-              "triggerStation": "10000139"
+              "triggerStation": "10000014",
+              "modalTitle": "XÁC NHẬN THÁO HÀNG XONG",
+              "modalMessage": "Xác nhận công nhân đã tháo dỡ toàn bộ hàng khỏi xe AMR an toàn?",
+              "modalVariant": "primary"
+            },
+            {
+              "id": "return",
+              "name": "CHO XE VỀ",
+              "triggerStation": "10000014",
+              "modalTitle": "XÁC NHẬN CHO XE VỀ",
+              "modalMessage": "Xác nhận hoàn tất phiên làm việc, điều phối AMR rời trạm và quay trở về vị trí chờ?",
+              "modalVariant": "primary"
             }
           ]
         }
@@ -57,12 +74,18 @@
             {
               "id": "rotate",
               "name": "AMR QUAY ĐẦU",
-              "triggerStation": "10000096"
+              "triggerStation": "10000096",
+              "modalTitle": "XÁC NHẬN AMR QUAY ĐẦU",
+              "modalMessage": "Xác nhận xe AMR đã dừng đúng vị trí trạm cấp và khu vực xung quanh an toàn để xe quay đầu?",
+              "modalVariant": "warning"
             },
             {
               "id": "supply",
               "name": "ĐI CẤP HÀNG",
-              "triggerStation": "10000095"
+              "triggerStation": "10000095",
+              "modalTitle": "XÁC NHẬN ĐI CẤP HÀNG",
+              "modalMessage": "Xác nhận đã cấp hàng lên xe chắc chắn và cho phép AMR bắt đầu di chuyển đến trạm tháo hàng?",
+              "modalVariant": "primary"
             }
           ]
         },
@@ -73,7 +96,18 @@
             {
               "id": "unload",
               "name": "THÁO HÀNG XONG",
-              "triggerStation": "10000139"
+              "triggerStation": "10000139",
+              "modalTitle": "XÁC NHẬN THÁO HÀNG XONG",
+              "modalMessage": "Xác nhận công nhân đã tháo dỡ toàn bộ hàng khỏi xe AMR an toàn?",
+              "modalVariant": "primary"
+            },
+            {
+              "id": "return",
+              "name": "CHO XE VỀ",
+              "triggerStation": "10000139",
+              "modalTitle": "XÁC NHẬN CHO XE VỀ",
+              "modalMessage": "Xác nhận hoàn tất phiên làm việc, điều phối AMR rời trạm và quay trở về vị trí chờ?",
+              "modalVariant": "primary"
             }
           ]
         }
@@ -91,12 +125,18 @@
             {
               "id": "rotate",
               "name": "AMR QUAY ĐẦU",
-              "triggerStation": "10000096"
+              "triggerStation": "10000096",
+              "modalTitle": "XÁC NHẬN AMR QUAY ĐẦU",
+              "modalMessage": "Xác nhận xe AMR đã dừng đúng vị trí trạm cấp và khu vực xung quanh an toàn để xe quay đầu?",
+              "modalVariant": "warning"
             },
             {
               "id": "supply",
               "name": "ĐI CẤP HÀNG",
-              "triggerStation": "10000095"
+              "triggerStation": "10000095",
+              "modalTitle": "XÁC NHẬN ĐI CẤP HÀNG",
+              "modalMessage": "Xác nhận đã cấp hàng lên xe chắc chắn và cho phép AMR bắt đầu di chuyển đến trạm tháo hàng?",
+              "modalVariant": "primary"
             }
           ]
         },
@@ -107,7 +147,18 @@
             {
               "id": "unload",
               "name": "THÁO HÀNG XONG",
-              "triggerStation": "10000139"
+              "triggerStation": "10000139",
+              "modalTitle": "XÁC NHẬN THÁO HÀNG XONG",
+              "modalMessage": "Xác nhận công nhân đã tháo dỡ toàn bộ hàng khỏi xe AMR an toàn?",
+              "modalVariant": "primary"
+            },
+            {
+              "id": "return",
+              "name": "CHO XE VỀ",
+              "triggerStation": "10000139",
+              "modalTitle": "XÁC NHẬN CHO XE VỀ",
+              "modalMessage": "Xác nhận hoàn tất phiên làm việc, điều phối AMR rời trạm và quay trở về vị trí chờ?",
+              "modalVariant": "primary"
             }
           ]
         }

@@ -16,6 +16,8 @@ import {
   Undo2,
   PackagePlus,
   PackageMinus,
+  ArrowDownToLine,
+  CornerDownLeft,
 } from 'lucide-react';
 import AMRStatusBoard from './AMRStatusBoard';
 
@@ -410,7 +412,7 @@ export const StationControl: React.FC<StationControlProps> = ({
         </div>
 
         {/* ACTION 2: DYNAMIC TRIGGERS */}
-        {config.triggers?.map((t) => {
+        {config.triggers?.map((t, idx) => {
           const isThisTriggering = isTriggering && activeTriggerId === t.id;
 
           let bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-300';
@@ -422,9 +424,28 @@ export const StationControl: React.FC<StationControlProps> = ({
           } else if (t.id === 'supply') {
             bgColor = 'bg-blue-500 hover:bg-blue-600 border-blue-400/50 hover:border-blue-400';
             TriggerIcon = PackagePlus;
+          } else if (t.id === 'confirm_arrive' || t.id === 'arrive') {
+            bgColor = 'bg-teal-600 hover:bg-teal-700 border-teal-400/50 hover:border-teal-400';
+            TriggerIcon = CheckCircle2;
+          } else if (t.id === 'start_unload') {
+            bgColor = 'bg-indigo-600 hover:bg-indigo-700 border-indigo-400/50 hover:border-indigo-400';
+            TriggerIcon = ArrowDownToLine;
           } else if (t.id === 'unload') {
             bgColor = 'bg-[#C96A6A] hover:bg-[#b55c5c] border-[#C96A6A]/50 hover:border-[#b55c5c]';
             TriggerIcon = PackageMinus;
+          } else if (t.id === 'return') {
+            bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-400';
+            TriggerIcon = CornerDownLeft;
+          } else {
+            // Flexible fallback palette for any additional triggers
+            const fallbackPalette = [
+              { bg: 'bg-teal-600 hover:bg-teal-700 border-teal-400/50 hover:border-teal-400', icon: CheckCircle2 },
+              { bg: 'bg-indigo-600 hover:bg-indigo-700 border-indigo-400/50 hover:border-indigo-400', icon: ArrowDownToLine },
+              { bg: 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-400', icon: Zap },
+            ];
+            const p = fallbackPalette[idx % fallbackPalette.length];
+            bgColor = p.bg;
+            TriggerIcon = p.icon;
           }
 
           return (
@@ -489,17 +510,65 @@ export const StationControl: React.FC<StationControlProps> = ({
       />
 
       {/* TRIGGER Confirm Modal */}
-      <ConfirmModal
-        isOpen={!!pendingTriggerId}
-        title="XÁC NHẬN AMR ĐÃ ĐẾN"
-        message={`Xác nhận AMR đã đến và xử lý xong để tiếp tục hành trình?`}
-        confirmText="XÁC NHẬN"
-        cancelText="HỦY"
-        variant="primary"
-        isLoading={isTriggering}
-        onConfirm={() => pendingTriggerId && handleTrigger(pendingTriggerId)}
-        onCancel={() => setPendingTriggerId(null)}
-      />
+      {(() => {
+        const activeTrigger = config.triggers?.find((t) => t.id === pendingTriggerId);
+
+        const defaultModals: Record<
+          string,
+          { title: string; message: string; variant: 'primary' | 'warning' | 'danger' }
+        > = {
+          rotate: {
+            title: 'XÁC NHẬN AMR QUAY ĐẦU',
+            message: 'Xác nhận xe AMR đã dừng đúng vị trí trạm cấp và khu vực xung quanh an toàn để xe quay đầu?',
+            variant: 'warning',
+          },
+          supply: {
+            title: 'XÁC NHẬN ĐI CẤP HÀNG',
+            message: 'Xác nhận đã cấp hàng lên xe chắc chắn và cho phép AMR bắt đầu di chuyển đến trạm tháo hàng?',
+            variant: 'primary',
+          },
+          unload: {
+            title: 'XÁC NHẬN THÁO HÀNG XONG',
+            message: 'Xác nhận công nhân đã tháo dỡ toàn bộ hàng khỏi xe AMR an toàn?',
+            variant: 'primary',
+          },
+          return: {
+            title: 'XÁC NHẬN CHO XE VỀ',
+            message: 'Xác nhận hoàn tất phiên làm việc, điều phối AMR rời trạm và quay trở về vị trí chờ?',
+            variant: 'primary',
+          },
+        };
+
+        const fallback = pendingTriggerId ? defaultModals[pendingTriggerId] : undefined;
+
+        const modalTitle =
+          activeTrigger?.modalTitle ||
+          fallback?.title ||
+          (activeTrigger ? `XÁC NHẬN: ${activeTrigger.name}` : 'XÁC NHẬN KÍCH HOẠT');
+
+        const modalMessage =
+          activeTrigger?.modalMessage ||
+          fallback?.message ||
+          (activeTrigger
+            ? `Bạn có chắc muốn thực hiện "${activeTrigger.name}" (Mã điểm: ${activeTrigger.triggerStation}) để tiếp tục hành trình cho AMR?`
+            : 'Xác nhận AMR đã đến và xử lý xong để tiếp tục hành trình?');
+
+        const modalVariant = activeTrigger?.modalVariant || fallback?.variant || 'primary';
+
+        return (
+          <ConfirmModal
+            isOpen={!!pendingTriggerId}
+            title={modalTitle}
+            message={modalMessage}
+            confirmText="XÁC NHẬN"
+            cancelText="HỦY"
+            variant={modalVariant}
+            isLoading={isTriggering}
+            onConfirm={() => pendingTriggerId && handleTrigger(pendingTriggerId)}
+            onCancel={() => setPendingTriggerId(null)}
+          />
+        );
+      })()}
 
       {/* RESET Line Confirm Modal (Decision 1 Option A) */}
       <ConfirmModal

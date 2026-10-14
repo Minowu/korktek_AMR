@@ -147,11 +147,13 @@ async function startServer() {
 
         // Find the device currently working on this line's active order
         let currentSubTaskSeq: string | undefined;
+        let currentSubTaskStatus: string | number | undefined;
         if (state.currentOrderId) {
           const activeDevice = stateManager.getAllDevices()
             .find(d => d.orderId === state.currentOrderId);
           if (activeDevice?.subTaskSeq !== undefined) {
             currentSubTaskSeq = activeDevice.subTaskSeq;
+            currentSubTaskStatus = activeDevice.subTaskStatus;
           }
         }
 
@@ -161,6 +163,7 @@ async function startServer() {
             line: lineKey,
             ...state,
             currentSubTaskSeq,
+            currentSubTaskStatus,
           },
         });
       }
@@ -359,7 +362,19 @@ async function startServer() {
       });
     }
 
+    const lineState = stateManager.getLineState(lineKey.toLowerCase());
+    if (lineState.status !== 'running') {
+      return res.status(409).json({
+        success: false,
+        errorCode: 'LINE_NOT_RUNNING',
+        message: `Line '${lineKey.toUpperCase()}' chưa có lệnh hoạt động. Vui lòng bấm GỌI LỆNH trước khi kích hoạt trigger.`,
+      });
+    }
+
+    const currentOrderId = lineState.currentOrderId || undefined;
+
     const triggerPayload = {
+      orderId: currentOrderId,
       currentStation: triggerConfig.triggerStation,
     };
 
@@ -370,6 +385,7 @@ async function startServer() {
         type: 'ERROR',
         line: lineKey,
         station: stationKey,
+        orderId: currentOrderId,
         payload: triggerPayload,
         response: triggerResult.error,
         success: false,
@@ -381,6 +397,7 @@ async function startServer() {
         success: false,
         errorCode: 'TRIGGER_FAILED',
         message: triggerResult.error || 'Gửi Trigger thất bại.',
+        orderId: currentOrderId,
         currentStation: triggerConfig.triggerStation,
         durationMs: triggerResult.durationMs,
       });
@@ -390,6 +407,7 @@ async function startServer() {
       type: 'TRIGGER',
       line: lineKey,
       station: stationKey,
+      orderId: currentOrderId,
       payload: triggerPayload,
       response: triggerResult.data,
       success: true,
@@ -399,6 +417,7 @@ async function startServer() {
 
     return res.json({
       success: true,
+      orderId: currentOrderId,
       currentStation: triggerConfig.triggerStation,
       stationCode: stationConfig.code,
       message: `Trigger điểm ${triggerConfig.triggerStation} thành công.`,
@@ -508,37 +527,40 @@ async function startServer() {
           stepName += ` cho ${targetLine.replace('-', ' ').toUpperCase()}`;
         }
 
-        stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId);
+        stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId, payload.subTaskStatus);
       }
 
-      // 3. Logic xử lý trạng thái tổng thể của order (Mở khoá line)
+      // 3. Logic xử lý trạng thái tổng thể của order (Mở khoá line & Xóa subtask trên xe)
       if (targetLine) {
         if (status == 8) {
           stateManager.resetLine(targetLine);
+          stateManager.clearDeviceTask(deviceCode, orderId);
           stateManager.addLog({
             type: 'ORDER',
             line: targetLine,
             orderId: orderId,
             success: true,
-            message: `[WEBHOOK] RCS báo hoàn thành lệnh ${orderId}. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+            message: `[WEBHOOK] RCS báo hoàn thành lệnh ${orderId}. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
           });
         } else if (status == 3) {
           stateManager.resetLine(targetLine);
+          stateManager.clearDeviceTask(deviceCode, orderId);
           stateManager.addLog({
             type: 'ORDER',
             line: targetLine,
             orderId: orderId,
             success: true,
-            message: `[WEBHOOK] RCS báo lệnh ${orderId} đã huỷ. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+            message: `[WEBHOOK] RCS báo lệnh ${orderId} đã huỷ. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
           });
         } else if (status == 5) {
           stateManager.resetLine(targetLine);
+          stateManager.clearDeviceTask(deviceCode, orderId);
           stateManager.addLog({
             type: 'ORDER',
             line: targetLine,
             orderId: orderId,
             success: true,
-            message: `[WEBHOOK] RCS báo lệnh ${orderId} failed. Đã tự động mở khóa Line ${targetLine.toUpperCase()}`
+            message: `[WEBHOOK] RCS báo lệnh ${orderId} failed. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
           });
         } else {
           // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line

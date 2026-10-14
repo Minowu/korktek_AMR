@@ -314,16 +314,16 @@ export const StationControl: React.FC<StationControlProps> = ({
               <span
                 id="line-status-badge"
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs ${isLinePending
-                    ? 'bg-amber-100 text-amber-700 border border-amber-300 animate-pulse'
-                    : isLineRunning
-                      ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
-                      : 'bg-main text-white border border-main'
+                  ? 'bg-amber-100 text-amber-700 border border-amber-300 animate-pulse'
+                  : isLineRunning
+                    ? 'bg-accent/10 text-accent border border-accent/20 animate-pulse'
+                    : 'bg-main text-white border border-main'
                   }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${isLinePending ? 'bg-amber-500'
-                      : isLineRunning ? 'bg-accent'
-                        : 'bg-emerald-400'
+                    : isLineRunning ? 'bg-accent'
+                      : 'bg-emerald-400'
                     }`}
                 />
                 {isLinePending ? 'ĐANG CHỜ RCS...' : isLineRunning ? 'ĐÃ NHẬN LỆNH' : 'SẴN SÀNG'}
@@ -385,10 +385,10 @@ export const StationControl: React.FC<StationControlProps> = ({
             disabled={isLineBusy || isOrdering}
             onClick={() => setShowOrderConfirm(true)}
             className={`w-full min-h-[78px] px-6 py-4 rounded-2xl font-black text-xl tracking-wide uppercase transition-all duration-150 flex flex-col items-center justify-center gap-1 shadow-xl border-2 ${isLinePending || isOrdering
-                ? 'bg-amber-100/90 text-amber-600 border-amber-300 cursor-wait shadow-none'
-                : isLineRunning
-                  ? 'bg-slate-100/90 text-slate-500 border-slate-300 cursor-not-allowed shadow-none'
-                  : 'bg-main hover:opacity-90 active:scale-[0.98] text-white border-main/50 hover:border-main'
+              ? 'bg-amber-100/90 text-amber-600 border-amber-300 cursor-wait shadow-none'
+              : isLineRunning
+                ? 'bg-slate-100/90 text-slate-500 border-slate-300 cursor-not-allowed shadow-none'
+                : 'bg-main hover:opacity-90 active:scale-[0.98] text-white border-main/50 hover:border-main'
               }`}
           >
             <div className="flex items-center gap-2">
@@ -417,23 +417,47 @@ export const StationControl: React.FC<StationControlProps> = ({
 
           // --- SubTaskSeq lock logic ---
           const currentSubTaskSeq = lineState?.currentSubTaskSeq;
+          const currentSubTaskStatus = lineState?.currentSubTaskStatus;
           const hasSeqConfig = t.requiredSubTaskSeq && t.requiredSubTaskSeq.length > 0;
 
-          // Lock when: line is running + RCS has sent seq signal + this trigger doesn't match
-          const isSeqLocked =
-            isLineRunning &&
-            currentSubTaskSeq !== undefined &&
-            hasSeqConfig &&
-            !t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
+          // 1. Khoá khi Line chưa chạy (status !== 'running')
+          const isLineNotRunning = !isLineRunning;
 
-          // Highlight when: line is running + seq matches this trigger
-          const isSeqActive =
+          // 2. Chờ tín hiệu đầu tiên từ xe (Line đang chạy nhưng xe chưa báo bước nào)
+          const isWaitingSignal = isLineRunning && currentSubTaskSeq === undefined;
+
+          // 3. Xe đã tới đúng bước của nút này chưa?
+          const isThisStep =
             isLineRunning &&
             currentSubTaskSeq !== undefined &&
             hasSeqConfig &&
             t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
 
-          const isButtonDisabled = isTriggering || isSeqLocked;
+          // 4. Bước không khớp
+          const isSeqMismatch =
+            isLineRunning &&
+            currentSubTaskSeq !== undefined &&
+            hasSeqConfig &&
+            !t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
+
+          // 5. Trạng thái xe ở bước hiện tại:
+          // 2 = đang di chuyển / đang làm
+          // 3 = đã đến điểm dừng / sẵn sàng kích hoạt
+          const isSubTaskMoving = isThisStep && String(currentSubTaskStatus) === '2';
+          const isSubTaskReady = isThisStep && String(currentSubTaskStatus) === '3';
+
+          // Nút CHỈ MỞ KHOÁ khi:
+          // Line đang chạy + đúng bước của nút + xe đã đến nơi (subTaskStatus == 3 hoặc fallback nếu RCS ko gửi status)
+          const isLocked =
+            isLineNotRunning ||
+            isWaitingSignal ||
+            isSeqMismatch ||
+            (isThisStep && currentSubTaskStatus !== undefined && !isSubTaskReady);
+
+          // Highlight khi xe đã đến trạm và sẵn sàng bấm
+          const isSeqActive = isThisStep && (currentSubTaskStatus === undefined || isSubTaskReady);
+
+          const isButtonDisabled = isTriggering || isLocked;
 
           // --- Color / Icon config ---
           let bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-300';
@@ -469,7 +493,7 @@ export const StationControl: React.FC<StationControlProps> = ({
           }
 
           // When locked: override to muted gray style
-          const buttonClass = isSeqLocked
+          const buttonClass = isLocked
             ? 'bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed shadow-none'
             : `${bgColor} text-white shadow-xl active:scale-[0.98]`;
 
@@ -488,7 +512,7 @@ export const StationControl: React.FC<StationControlProps> = ({
                 <div className="flex items-center gap-2">
                   {isThisTriggering ? (
                     <span className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : isSeqLocked ? (
+                  ) : isLocked ? (
                     <Clock className="w-6 h-6" />
                   ) : (
                     <TriggerIcon className="w-6 h-6" />
@@ -496,11 +520,17 @@ export const StationControl: React.FC<StationControlProps> = ({
                   <span>{t.name}</span>
                 </div>
                 <span className="text-[11px] font-medium tracking-normal normal-case opacity-80 font-mono">
-                  {isSeqLocked
-                    ? `Chờ tín hiệu xe... (bước hiện tại: ${currentSubTaskSeq ?? '?'})`
-                    : isSeqActive
-                      ? '✓ Xe đã đến — Sẵn sàng kích hoạt'
-                      : `Mã điểm: ${t.triggerStation}`}
+                  {isLineNotRunning
+                    ? 'Chưa thể bấm (Cần gọi lệnh trước)'
+                    : isWaitingSignal
+                      ? 'Đang chờ tín hiệu từ xe...'
+                      : isSubTaskMoving
+                        ? '⏱️ Xe đang di chuyển tới trạm...'
+                        : isSubTaskReady
+                          ? '✓ Xe đã đến trạm — Sẵn sàng kích hoạt'
+                          : isSeqMismatch
+                            ? `Chờ tín hiệu xe... (bước hiện tại: ${currentSubTaskSeq ?? '?'})`
+                            : `Mã điểm: ${t.triggerStation}`}
                 </span>
               </button>
             </div>
@@ -509,7 +539,7 @@ export const StationControl: React.FC<StationControlProps> = ({
       </div>
 
       {/* 4. UTILITY / RESET ACTION (Decision 1 - Option A) */}
-      <div className="pt-3 border-t border-slate-200/80 space-y-2">
+      {/* <div className="pt-3 border-t border-slate-200/80 space-y-2">
         <div className="flex items-center justify-between text-xs text-slate-600 px-1">
           <span className="text-red-500 font-bold">Lưu ý chỉ dành trong trường hợp đặc biệt :</span>
         </div>
@@ -527,7 +557,7 @@ export const StationControl: React.FC<StationControlProps> = ({
           <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
           <span>MỞ KHÓA / RESET {config.lineName.toUpperCase()}</span>
         </button>
-      </div>
+      </div> */}
 
       {/* 5. Confirmation Modals */}
       {/* GỌI LỆNH Confirm Modal (Requirement Section 14) */}

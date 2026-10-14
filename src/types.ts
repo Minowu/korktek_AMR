@@ -31,6 +31,7 @@ export interface LineState {
   line: string;
   status: 'idle' | 'pending' | 'running';
   currentSubTaskSeq?: string;
+  currentSubTaskStatus?: string | number;
   currentOrderId: string | null;
   lockedAt: string | null;
   lockedByStation: string | null;

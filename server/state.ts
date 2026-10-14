@@ -21,6 +21,7 @@ export interface DeviceInfo {
   lastUpdated: string;
   currentTaskStep?: string; // Tên bước hiện tại từ /api/rcs
   subTaskSeq?: string;      // 0, 1, 2, 3 từ /api/rcs
+  subTaskStatus?: string | number; // 2: đang làm, 3: hoàn thành/đã tới điểm
   currentAlarm?: {
     type: number;
     text: string;
@@ -66,14 +67,29 @@ class SystemStateManager {
     }
   }
 
-  public updateDeviceTaskStep(deviceCode: string, subTaskSeq: string, stepName: string, orderId: string) {
+  public updateDeviceTaskStep(deviceCode: string, subTaskSeq: string, stepName: string, orderId: string, subTaskStatus?: string | number) {
     if (this.devices[deviceCode]) {
       this.devices[deviceCode].subTaskSeq = subTaskSeq;
+      this.devices[deviceCode].subTaskStatus = subTaskStatus;
       this.devices[deviceCode].currentTaskStep = stepName;
       this.devices[deviceCode].orderId = orderId;
       this.devices[deviceCode].lastUpdated = new Date().toISOString();
     } else {
       console.warn(`[WARNING] Bỏ qua cập nhật tiến độ (RCS) cho thiết bị không xác định: ${deviceCode}`);
+    }
+  }
+
+  public clearDeviceTask(deviceCode?: string, orderId?: string) {
+    for (const code in this.devices) {
+      const matchDevice = deviceCode && (code === deviceCode || this.devices[code].deviceName === deviceCode);
+      const matchOrder = orderId && this.devices[code].orderId === orderId;
+      if (matchDevice || matchOrder) {
+        this.devices[code].subTaskSeq = undefined;
+        this.devices[code].subTaskStatus = undefined;
+        this.devices[code].currentTaskStep = undefined;
+        this.devices[code].orderId = '';
+        this.devices[code].lastUpdated = new Date().toISOString();
+      }
     }
   }
 

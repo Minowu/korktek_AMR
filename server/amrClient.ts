@@ -52,7 +52,8 @@ export interface AmrOrderPayload {
 }
 
 export interface AmrTriggerPayload {
-  currentStation: string;
+  orderId?: string;
+  currentStation?: string;
 }
 
 class AmrClientService {

@@ -13,6 +13,7 @@ export interface StationTrigger {
   modalTitle?: string;
   modalMessage?: string;
   modalVariant?: 'primary' | 'warning' | 'danger';
+  requiredSubTaskSeq?: string[];
 }
 
 export interface StationConfig {
@@ -29,6 +30,7 @@ export interface StationConfig {
 export interface LineState {
   line: string;
   status: 'idle' | 'pending' | 'running';
+  currentSubTaskSeq?: string;
   currentOrderId: string | null;
   lockedAt: string | null;
   lockedByStation: string | null;

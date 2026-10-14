@@ -33,6 +33,7 @@ export interface AmrConfig {
             modalTitle?: string;
             modalMessage?: string;
             modalVariant?: 'primary' | 'warning' | 'danger';
+            requiredSubTaskSeq?: string[];
           }>;
         }
       >;

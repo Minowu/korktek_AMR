@@ -415,6 +415,27 @@ export const StationControl: React.FC<StationControlProps> = ({
         {config.triggers?.map((t, idx) => {
           const isThisTriggering = isTriggering && activeTriggerId === t.id;
 
+          // --- SubTaskSeq lock logic ---
+          const currentSubTaskSeq = lineState?.currentSubTaskSeq;
+          const hasSeqConfig = t.requiredSubTaskSeq && t.requiredSubTaskSeq.length > 0;
+
+          // Lock when: line is running + RCS has sent seq signal + this trigger doesn't match
+          const isSeqLocked =
+            isLineRunning &&
+            currentSubTaskSeq !== undefined &&
+            hasSeqConfig &&
+            !t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
+
+          // Highlight when: line is running + seq matches this trigger
+          const isSeqActive =
+            isLineRunning &&
+            currentSubTaskSeq !== undefined &&
+            hasSeqConfig &&
+            t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
+
+          const isButtonDisabled = isTriggering || isSeqLocked;
+
+          // --- Color / Icon config ---
           let bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-300';
           let TriggerIcon = Zap;
 
@@ -437,7 +458,6 @@ export const StationControl: React.FC<StationControlProps> = ({
             bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-400';
             TriggerIcon = CornerDownLeft;
           } else {
-            // Flexible fallback palette for any additional triggers
             const fallbackPalette = [
               { bg: 'bg-teal-600 hover:bg-teal-700 border-teal-400/50 hover:border-teal-400', icon: CheckCircle2 },
               { bg: 'bg-indigo-600 hover:bg-indigo-700 border-indigo-400/50 hover:border-indigo-400', icon: ArrowDownToLine },
@@ -448,25 +468,39 @@ export const StationControl: React.FC<StationControlProps> = ({
             TriggerIcon = p.icon;
           }
 
+          // When locked: override to muted gray style
+          const buttonClass = isSeqLocked
+            ? 'bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed shadow-none'
+            : `${bgColor} text-white shadow-xl active:scale-[0.98]`;
+
           return (
             <div key={t.id} className="space-y-1">
               <button
                 id={`trigger-btn-${t.id}`}
                 type="button"
-                disabled={isTriggering}
+                disabled={isButtonDisabled}
                 onClick={() => setPendingTriggerId(t.id)}
-                className={`w-full min-h-[78px] px-6 py-4 rounded-2xl font-black text-xl tracking-wide uppercase text-white border-2 transition-all duration-150 flex flex-col items-center justify-center gap-1 shadow-xl disabled:opacity-70 disabled:scale-100 ${bgColor} active:scale-[0.98]`}
+                className={`w-full min-h-[78px] px-6 py-4 rounded-2xl font-black text-xl tracking-wide uppercase border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 disabled:scale-100
+                  ${buttonClass}
+                  ${isSeqActive ? 'ring-4 ring-white ring-offset-2 ring-offset-transparent scale-[1.01]' : ''}
+                `}
               >
                 <div className="flex items-center gap-2">
                   {isThisTriggering ? (
                     <span className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : isSeqLocked ? (
+                    <Clock className="w-6 h-6" />
                   ) : (
                     <TriggerIcon className="w-6 h-6" />
                   )}
                   <span>{t.name}</span>
                 </div>
                 <span className="text-[11px] font-medium tracking-normal normal-case opacity-80 font-mono">
-                  Mã điểm: {t.triggerStation}
+                  {isSeqLocked
+                    ? `Chờ tín hiệu xe... (bước hiện tại: ${currentSubTaskSeq ?? '?'})`
+                    : isSeqActive
+                      ? '✓ Xe đã đến — Sẵn sàng kích hoạt'
+                      : `Mã điểm: ${t.triggerStation}`}
                 </span>
               </button>
             </div>

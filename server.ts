@@ -144,11 +144,23 @@ async function startServer() {
       const lineKey = typeof req.query.line === 'string' ? req.query.line.toLowerCase() : undefined;
       if (lineKey) {
         const state = stateManager.getLineState(lineKey);
+
+        // Find the device currently working on this line's active order
+        let currentSubTaskSeq: string | undefined;
+        if (state.currentOrderId) {
+          const activeDevice = stateManager.getAllDevices()
+            .find(d => d.orderId === state.currentOrderId);
+          if (activeDevice?.subTaskSeq !== undefined) {
+            currentSubTaskSeq = activeDevice.subTaskSeq;
+          }
+        }
+
         return res.json({
           success: true,
           data: {
             line: lineKey,
             ...state,
+            currentSubTaskSeq,
           },
         });
       }

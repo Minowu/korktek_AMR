@@ -145,10 +145,11 @@ async function startServer() {
       if (lineKey) {
         const state = stateManager.getLineState(lineKey);
 
-        // Find the device currently working on this line's active order
-        let currentSubTaskSeq: string | undefined;
-        let currentSubTaskStatus: string | number | undefined;
-        if (state.currentOrderId) {
+        let currentSubTaskSeq = state.currentSubTaskSeq;
+        let currentSubTaskStatus = state.currentSubTaskStatus;
+
+        // Fallback: nếu chưa có trên state, tìm từ activeDevice
+        if (!currentSubTaskSeq && state.currentOrderId) {
           const activeDevice = stateManager.getAllDevices()
             .find(d => d.orderId === state.currentOrderId);
           if (activeDevice?.subTaskSeq !== undefined) {
@@ -403,6 +404,13 @@ async function startServer() {
       });
     }
 
+    // Sau khi trigger thành công, xe bắt đầu di chuyển tới điểm tiếp theo
+    stateManager.setLineSubTask(lineKey.toLowerCase(), undefined, '2');
+    const activeDev = stateManager.getAllDevices().find(d => d.orderId === currentOrderId);
+    if (activeDev) {
+      activeDev.subTaskStatus = '2';
+    }
+
     stateManager.addLog({
       type: 'TRIGGER',
       line: lineKey,
@@ -486,39 +494,80 @@ async function startServer() {
     console.log('\n[WEBHOOK] /api/rcs RAW PAYLOAD:');
     console.log(JSON.stringify(req.body, null, 2));
     try {
-      // API gửi dạng { at: '...', payload: { ... } }
-      const payload = req.body?.payload || req.body || {};
-      const { orderId, status, deviceCode, subTaskSeq } = payload;
+      // API gửi dạng { at: '...', payload: { ... } } hoặc gửi trực tiếp { ... }
+      let payload = req.body?.payload || req.body || {};
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch { }
+      }
+
+      const orderId = payload.orderId || req.body?.orderId;
+      const rawStatus = payload.status ?? payload.orderStatus ?? payload.taskStatus ?? payload.state ?? req.body?.status;
+      const status = rawStatus !== undefined ? Number(rawStatus) : undefined;
+      const deviceCode = payload.deviceCode || payload.deviceName || payload.deviceNum || req.body?.deviceCode;
+      const subTaskSeq = payload.subTaskSeq !== undefined ? payload.subTaskSeq : req.body?.subTaskSeq;
+      const subTaskStatus = payload.subTaskStatus !== undefined ? payload.subTaskStatus : req.body?.subTaskStatus;
 
       const sendSuccess = () => res.json({ "code": 1000, "desc": "success" });
 
-      if (!orderId) {
-        return res.status(400).json({ success: false, message: "Thiếu orderId" });
+      if (!orderId && status === undefined) {
+        return res.status(400).json({ success: false, message: "Thiếu orderId hoặc status" });
       }
 
       // 1. Tìm xem orderId này thuộc Line nào
       const allStates = stateManager.getAllStates();
       let targetLine: string | null = null;
 
-      for (const [lineKey, state] of Object.entries(allStates)) {
-        if (state.currentOrderId === orderId) {
-          targetLine = lineKey;
-          break;
+      if (orderId) {
+        for (const [lineKey, state] of Object.entries(allStates)) {
+          if (state.currentOrderId === orderId) {
+            targetLine = lineKey;
+            break;
+          }
+        }
+
+        // Fallback tìm line theo tiền tố orderLabel cấu hình trong config
+        if (!targetLine) {
+          const cfg = amrClient.getConfig();
+          for (const [lineKey, lineConfig] of Object.entries(cfg.lines)) {
+            if (lineConfig.orderLabel && orderId.startsWith(lineConfig.orderLabel)) {
+              targetLine = lineKey;
+              break;
+            }
+          }
         }
       }
 
       // 2. Cập nhật tiến độ subTask nếu có
+      // Status 10 từ RCS: Xe đã đến điểm dừng và đang chờ kích hoạt (waiting for continue trigger) -> coi như subTaskStatus = 3
+      // Status 6: Xe đang di chuyển -> subTaskStatus = 2
+      let resolvedSubTaskStatus = subTaskStatus;
+      if (status === 10 && resolvedSubTaskStatus === undefined) {
+        resolvedSubTaskStatus = '3';
+      } else if (status === 6 && resolvedSubTaskStatus === undefined) {
+        resolvedSubTaskStatus = '2';
+      }
+
+      if (targetLine) {
+        stateManager.setLineSubTask(
+          targetLine,
+          subTaskSeq !== undefined ? String(subTaskSeq) : undefined,
+          resolvedSubTaskStatus
+        );
+      }
+
       if (deviceCode && subTaskSeq !== undefined) {
         let statusPrefix = "";
-        if (payload.subTaskStatus === "2" || payload.subTaskStatus === 2) statusPrefix = "[Đang làm] ";
-        if (payload.subTaskStatus === "3" || payload.subTaskStatus === 3) statusPrefix = "[Hoàn thành] ";
+        if (String(resolvedSubTaskStatus) === "2") statusPrefix = "[Đang làm] ";
+        if (String(resolvedSubTaskStatus) === "3") statusPrefix = "[Hoàn thành] ";
 
         const stepMapping: Record<string, string> = {
           "0": "Bắt đầu đi đến điểm lấy hàng",
           "1": "Đang quay xe để móc hàng",
           "2": "Đang đi đến chỗ cấp hàng",
-          "3": "Quay xe để móc hàng",
-          "4": "Xe đã đến điểm trả hàng",
+          "3": "Đang quay xe để móc hàng",
+          "4": "Xe đang đến điểm trả hàng",
           "5": "Hoàn tất tháo hàng"
         };
 
@@ -527,51 +576,43 @@ async function startServer() {
           stepName += ` cho ${targetLine.replace('-', ' ').toUpperCase()}`;
         }
 
-        stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId, payload.subTaskStatus);
+        stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId || '', resolvedSubTaskStatus);
       }
 
       // 3. Logic xử lý trạng thái tổng thể của order (Mở khoá line & Xóa subtask trên xe)
-      if (targetLine) {
-        if (status == 8) {
+      // Status: 8 = hoàn thành, 3 = huỷ lệnh, 5 = thất bại
+      if (status == 8 || status == 3 || status == 5) {
+        // Mở khóa Line
+        if (targetLine) {
           stateManager.resetLine(targetLine);
-          stateManager.clearDeviceTask(deviceCode, orderId);
-          stateManager.addLog({
-            type: 'ORDER',
-            line: targetLine,
-            orderId: orderId,
-            success: true,
-            message: `[WEBHOOK] RCS báo hoàn thành lệnh ${orderId}. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
-          });
-        } else if (status == 3) {
-          stateManager.resetLine(targetLine);
-          stateManager.clearDeviceTask(deviceCode, orderId);
-          stateManager.addLog({
-            type: 'ORDER',
-            line: targetLine,
-            orderId: orderId,
-            success: true,
-            message: `[WEBHOOK] RCS báo lệnh ${orderId} đã huỷ. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
-          });
-        } else if (status == 5) {
-          stateManager.resetLine(targetLine);
-          stateManager.clearDeviceTask(deviceCode, orderId);
-          stateManager.addLog({
-            type: 'ORDER',
-            line: targetLine,
-            orderId: orderId,
-            success: true,
-            message: `[WEBHOOK] RCS báo lệnh ${orderId} failed. Đã tự động mở khóa Line ${targetLine.toUpperCase()} và xóa trạng thái Subtask.`
-          });
-        } else {
-          // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line
-          stateManager.addLog({
-            type: 'ORDER',
-            line: targetLine,
-            orderId: orderId,
-            success: true,
-            message: `[WEBHOOK] RCS cập nhật lệnh ${orderId} với trạng thái: ${status}`
-          });
+        } else if (orderId) {
+          for (const [lineKey, state] of Object.entries(allStates)) {
+            if (state.currentOrderId === orderId) {
+              stateManager.resetLine(lineKey);
+            }
+          }
         }
+
+        // LUÔN LUÔN xóa trạng thái subtask trên xe (kể cả khi không tìm thấy targetLine)
+        stateManager.clearDeviceTask(deviceCode, orderId);
+
+        const statusText = status == 8 ? 'hoàn thành' : status == 3 ? 'đã huỷ' : 'thất bại';
+        stateManager.addLog({
+          type: 'ORDER',
+          line: targetLine || 'ALL',
+          orderId: orderId,
+          success: true,
+          message: `[WEBHOOK] RCS báo lệnh ${orderId || 'không rõ'} ${statusText} (status: ${status}). Đã tự động mở khóa Line và xóa trạng thái Subtask.`
+        });
+      } else {
+        // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line
+        stateManager.addLog({
+          type: 'ORDER',
+          line: targetLine || 'UNKNOWN',
+          orderId: orderId,
+          success: true,
+          message: `[WEBHOOK] RCS cập nhật lệnh ${orderId} với trạng thái: ${status}`
+        });
       }
 
       // Luôn trả về 1000 cho RCS

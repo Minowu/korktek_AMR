@@ -5,7 +5,6 @@ import { ConfirmModal } from './ConfirmModal';
 import {
   Send,
   Zap,
-  RotateCcw,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -416,6 +415,7 @@ export const StationControl: React.FC<StationControlProps> = ({
           const isThisTriggering = isTriggering && activeTriggerId === t.id;
 
           // --- SubTaskSeq lock logic ---
+
           const currentSubTaskSeq = lineState?.currentSubTaskSeq;
           const currentSubTaskStatus = lineState?.currentSubTaskStatus;
           const hasSeqConfig = t.requiredSubTaskSeq && t.requiredSubTaskSeq.length > 0;
@@ -423,39 +423,34 @@ export const StationControl: React.FC<StationControlProps> = ({
           // 1. Khoá khi Line chưa chạy (status !== 'running')
           const isLineNotRunning = !isLineRunning;
 
-          // 2. Chờ tín hiệu đầu tiên từ xe (Line đang chạy nhưng xe chưa báo bước nào)
-          const isWaitingSignal = isLineRunning && currentSubTaskSeq === undefined;
-
-          // 3. Xe đã tới đúng bước của nút này chưa?
           const isThisStep =
             isLineRunning &&
-            currentSubTaskSeq !== undefined &&
             hasSeqConfig &&
             t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
 
-          // 4. Bước không khớp
+          // 3. Bước không khớp
           const isSeqMismatch =
             isLineRunning &&
-            currentSubTaskSeq !== undefined &&
             hasSeqConfig &&
             !t.requiredSubTaskSeq!.includes(currentSubTaskSeq);
 
-          // 5. Trạng thái xe ở bước hiện tại:
-          // 2 = đang di chuyển / đang làm
-          // 3 = đã đến điểm dừng / sẵn sàng kích hoạt
-          const isSubTaskMoving = isThisStep && String(currentSubTaskStatus) === '2';
-          const isSubTaskReady = isThisStep && String(currentSubTaskStatus) === '3';
+          // 4. Trạng thái xe ở bước hiện tại:
+          // 2 hoặc 6 = đang di chuyển / đang làm
+          // 3 hoặc 10 = đã đến điểm dừng / sẵn sàng kích hoạt
+          const isSubTaskMoving = isThisStep && (String(currentSubTaskStatus) === '2' || String(currentSubTaskStatus) === '6');
+          const isSubTaskReady = isThisStep && (
+            String(currentSubTaskStatus) === '3' ||
+            String(currentSubTaskStatus) === '10' ||
+            // Fallback: nếu mới gọi lệnh mà chưa có status moving, bước 0 sẵn sàng kích hoạt
+            (currentSubTaskStatus === undefined && currentSubTaskSeq === '0' && t.requiredSubTaskSeq?.includes('0'))
+          );
 
           // Nút CHỈ MỞ KHOÁ khi:
-          // Line đang chạy + đúng bước của nút + xe đã đến nơi (subTaskStatus == 3 hoặc fallback nếu RCS ko gửi status)
-          const isLocked =
-            isLineNotRunning ||
-            isWaitingSignal ||
-            isSeqMismatch ||
-            (isThisStep && currentSubTaskStatus !== undefined && !isSubTaskReady);
+          // Line đang chạy + đúng bước của nút + xe đã đến nơi sẵn sàng kích hoạt
+          const isLocked = isLineNotRunning || isSeqMismatch || !isSubTaskReady;
 
           // Highlight khi xe đã đến trạm và sẵn sàng bấm
-          const isSeqActive = isThisStep && (currentSubTaskStatus === undefined || isSubTaskReady);
+          const isSeqActive = isThisStep && isSubTaskReady;
 
           const isButtonDisabled = isTriggering || isLocked;
 
@@ -481,6 +476,9 @@ export const StationControl: React.FC<StationControlProps> = ({
           } else if (t.id === 'return') {
             bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-400';
             TriggerIcon = CornerDownLeft;
+          } else if (t.id === 'finish' || t.id === 'complete') {
+            bgColor = 'bg-emerald-600 hover:bg-emerald-700 border-emerald-400/50 hover:border-emerald-400';
+            TriggerIcon = CheckCircle2;
           } else {
             const fallbackPalette = [
               { bg: 'bg-teal-600 hover:bg-teal-700 border-teal-400/50 hover:border-teal-400', icon: CheckCircle2 },
@@ -522,15 +520,13 @@ export const StationControl: React.FC<StationControlProps> = ({
                 <span className="text-[11px] font-medium tracking-normal normal-case opacity-80 font-mono">
                   {isLineNotRunning
                     ? 'Chưa thể bấm (Cần gọi lệnh trước)'
-                    : isWaitingSignal
-                      ? 'Đang chờ tín hiệu từ xe...'
-                      : isSubTaskMoving
-                        ? '⏱️ Xe đang di chuyển tới trạm...'
-                        : isSubTaskReady
-                          ? '✓ Xe đã đến trạm — Sẵn sàng kích hoạt'
-                          : isSeqMismatch
-                            ? `Chờ tín hiệu xe... (bước hiện tại: ${currentSubTaskSeq ?? '?'})`
-                            : `Mã điểm: ${t.triggerStation}`}
+                    : isSubTaskMoving
+                      ? '⏱️ Xe đang di chuyển tới trạm...'
+                      : isSubTaskReady
+                        ? '✓ Xe đã đến trạm — Sẵn sàng kích hoạt'
+                        : isSeqMismatch
+                          ? `Chờ lượt xe... (bước hiện tại: ${currentSubTaskSeq})`
+                          : `Mã điểm: ${t.triggerStation}`}
                 </span>
               </button>
             </div>
@@ -538,28 +534,7 @@ export const StationControl: React.FC<StationControlProps> = ({
         })}
       </div>
 
-      {/* 4. UTILITY / RESET ACTION (Decision 1 - Option A) */}
-      {/* <div className="pt-3 border-t border-slate-200/80 space-y-2">
-        <div className="flex items-center justify-between text-xs text-slate-600 px-1">
-          <span className="text-red-500 font-bold">Lưu ý chỉ dành trong trường hợp đặc biệt :</span>
-        </div>
-
-        <button
-          id="reset-line-btn"
-          type="button"
-          disabled={isResetting}
-          onClick={() => setShowResetConfirm(true)}
-          className={`w-full min-h-[48px] px-4 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 border ${isLineRunning
-            ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-300'
-            : 'bg-slate-100/60 hover:bg-slate-100 text-slate-600 border-slate-300/50'
-            }`}
-        >
-          <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
-          <span>MỞ KHÓA / RESET {config.lineName.toUpperCase()}</span>
-        </button>
-      </div> */}
-
-      {/* 5. Confirmation Modals */}
+      {/* 4. Confirmation Modals */}
       {/* GỌI LỆNH Confirm Modal (Requirement Section 14) */}
       <ConfirmModal
         isOpen={showOrderConfirm}
@@ -601,6 +576,16 @@ export const StationControl: React.FC<StationControlProps> = ({
             message: 'Xác nhận hoàn tất phiên làm việc, điều phối AMR rời trạm và quay trở về vị trí chờ?',
             variant: 'primary',
           },
+          finish: {
+            title: 'XÁC NHẬN HOÀN TẤT CHU TRÌNH',
+            message: 'Xác nhận xe AMR đã về đúng vị trí trạm và hoàn tất toàn bộ chu trình làm việc?',
+            variant: 'primary',
+          },
+          complete: {
+            title: 'XÁC NHẬN HOÀN TẤT CHU TRÌNH',
+            message: 'Xác nhận xe AMR đã về đúng vị trí trạm và hoàn tất toàn bộ chu trình làm việc?',
+            variant: 'primary',
+          },
         };
 
         const fallback = pendingTriggerId ? defaultModals[pendingTriggerId] : undefined;
@@ -633,19 +618,6 @@ export const StationControl: React.FC<StationControlProps> = ({
           />
         );
       })()}
-
-      {/* RESET Line Confirm Modal (Decision 1 Option A) */}
-      <ConfirmModal
-        isOpen={showResetConfirm}
-        title="XÁC NHẬN MỞ KHÓA LINE"
-        message={`Bạn có chắc muốn mở khóa ${config.lineName} về trạng thái IDLE không? Nút GỌI LỆNH sẽ được kích hoạt lại cho cả 2 Station của Line.`}
-        confirmText="MỞ KHÓA"
-        cancelText="HỦY"
-        variant="warning"
-        isLoading={isResetting}
-        onConfirm={handleConfirmReset}
-        onCancel={() => setShowResetConfirm(false)}
-      />
     </div>
   );
 };

@@ -6,6 +6,8 @@ export interface LineState {
   currentOrderId: string | null;
   lockedAt: string | null;
   lockedByStation: string | null;
+  currentSubTaskSeq?: string;
+  currentSubTaskStatus?: string | number;
 }
 
 export interface DeviceInfo {
@@ -58,9 +60,21 @@ class SystemStateManager {
     for (const item of dataArray) {
       const code = item.deviceCode;
       if (code) {
+        // deviceStatus: 4 = In task. Nếu xe rảnh (1), sạc (5), lỗi (2), hoặc orderId rỗng -> không còn task
+        const isDeviceInTask = Number(item.deviceStatus) === 4 && Boolean(item.orderId);
+        const previous: Partial<DeviceInfo> = this.devices[code] || {};
+
+        // Nếu xe không còn chạy task, tự động xóa subtask cũ để không bị treo trên bảng trạng thái
+        const currentTaskStep = isDeviceInTask ? previous.currentTaskStep : undefined;
+        const subTaskSeq = isDeviceInTask ? previous.subTaskSeq : undefined;
+        const subTaskStatus = isDeviceInTask ? previous.subTaskStatus : undefined;
+
         this.devices[code] = {
-          ...this.devices[code], // Giữ lại thông tin cũ (như currentTaskStep, subTaskSeq)
+          ...previous,
           ...item,
+          currentTaskStep,
+          subTaskSeq,
+          subTaskStatus,
           lastUpdated: now
         };
       }
@@ -75,20 +89,49 @@ class SystemStateManager {
       this.devices[deviceCode].orderId = orderId;
       this.devices[deviceCode].lastUpdated = new Date().toISOString();
     } else {
-      console.warn(`[WARNING] Bỏ qua cập nhật tiến độ (RCS) cho thiết bị không xác định: ${deviceCode}`);
+      // Khởi tạo thiết bị nếu chưa có thông tin từ deviceInfo để không bỏ sót tiến độ
+      this.devices[deviceCode] = {
+        deviceCode,
+        deviceName: deviceCode,
+        state: 'InTask',
+        deviceStatus: 4,
+        battery: '--',
+        taskPath: '',
+        orderId: orderId,
+        shelfNum: '',
+        devicePosition: '',
+        subTaskSeq,
+        subTaskStatus,
+        currentTaskStep: stepName,
+        lastUpdated: new Date().toISOString()
+      };
     }
   }
 
   public clearDeviceTask(deviceCode?: string, orderId?: string) {
-    for (const code in this.devices) {
-      const matchDevice = deviceCode && (code === deviceCode || this.devices[code].deviceName === deviceCode);
-      const matchOrder = orderId && this.devices[code].orderId === orderId;
-      if (matchDevice || matchOrder) {
-        this.devices[code].subTaskSeq = undefined;
-        this.devices[code].subTaskStatus = undefined;
-        this.devices[code].currentTaskStep = undefined;
-        this.devices[code].orderId = '';
-        this.devices[code].lastUpdated = new Date().toISOString();
+    const codes = Object.keys(this.devices);
+    const hasOnlyOneDevice = codes.length === 1;
+
+    for (const code of codes) {
+      const dev = this.devices[code];
+      const matchDevice = deviceCode && (
+        code.toLowerCase() === deviceCode.toLowerCase() ||
+        dev.deviceName?.toLowerCase() === deviceCode.toLowerCase() ||
+        code.includes(deviceCode) ||
+        deviceCode.includes(code)
+      );
+      const matchOrder = orderId && (
+        dev.orderId === orderId ||
+        (dev.currentTaskStep && dev.currentTaskStep.includes(orderId))
+      );
+
+      // Xóa nếu khớp deviceCode, khớp orderId, hoặc toàn bộ hệ thống chỉ có 1 xe, hoặc gọi clear không truyền tham số
+      if (matchDevice || matchOrder || hasOnlyOneDevice || (!deviceCode && !orderId)) {
+        dev.subTaskSeq = undefined;
+        dev.subTaskStatus = undefined;
+        dev.currentTaskStep = undefined;
+        dev.orderId = '';
+        dev.lastUpdated = new Date().toISOString();
       }
     }
   }
@@ -198,10 +241,19 @@ class SystemStateManager {
 
     if (current.status === 'pending') {
       current.status = 'running';
+      current.currentSubTaskSeq = '0';
+      current.currentSubTaskStatus = '2'; // Xe bắt đầu di chuyển tới trạm đầu
       return { success: true };
     }
 
     return { success: false, error: `Line '${lineKey}' không ở trạng thái chờ (pending).` };
+  }
+
+  public setLineSubTask(lineKey: string, seq?: string, status?: string | number) {
+    if (this.lineStates[lineKey]) {
+      if (seq !== undefined) this.lineStates[lineKey].currentSubTaskSeq = seq;
+      if (status !== undefined) this.lineStates[lineKey].currentSubTaskStatus = status;
+    }
   }
 
   public resetLine(lineKey: string): { success: boolean; message: string } {
@@ -211,6 +263,8 @@ class SystemStateManager {
         currentOrderId: null,
         lockedAt: null,
         lockedByStation: null,
+        currentSubTaskSeq: undefined,
+        currentSubTaskStatus: undefined,
       };
       return { success: true, message: `Line '${lineKey}' đã được thiết lập về trạng thái IDLE.` };
     }
@@ -221,7 +275,18 @@ class SystemStateManager {
       currentOrderId: null,
       lockedAt: null,
       lockedByStation: null,
+      currentSubTaskSeq: undefined,
+      currentSubTaskStatus: undefined,
     };
+
+    // Khi reset line, xóa luôn subtask trên xe liên quan
+    if (previousOrderId) {
+      this.clearDeviceTask(undefined, previousOrderId);
+    } else {
+      if (Object.keys(this.devices).length === 1) {
+        this.clearDeviceTask();
+      }
+    }
 
     this.addLog({
       type: 'RESET',

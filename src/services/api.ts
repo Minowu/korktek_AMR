@@ -1,10 +1,24 @@
 import { AllLinesConfig, ApiResponse, LineState, StationConfig, ActivityLog } from '../types';
 
 let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
 
 export const api = {
   setToken(token: string | null) {
     authToken = token;
+  },
+
+  setOnUnauthorized(cb: (() => void) | null) {
+    onUnauthorized = cb;
+  },
+
+  // Phiên hết hạn / chưa đăng nhập -> xoá token và báo App quay về trang login
+  async handle<T>(res: Response): Promise<T> {
+    if (res.status === 401 && authToken) {
+      authToken = null;
+      onUnauthorized?.();
+    }
+    return res.json();
   },
 
   getHeaders(): HeadersInit {
@@ -50,7 +64,7 @@ export const api = {
       headers: this.getHeaders(),
       body: JSON.stringify({ line, station }),
     });
-    return res.json();
+    return this.handle(res);
   },
 
   async sendTrigger(line: string, station: string, triggerId: string): Promise<ApiResponse<any>> {
@@ -59,7 +73,7 @@ export const api = {
       headers: this.getHeaders(),
       body: JSON.stringify({ line, station, triggerId }),
     });
-    return res.json();
+    return this.handle(res);
   },
 
   async resetLine(line: string): Promise<ApiResponse<any>> {
@@ -68,7 +82,7 @@ export const api = {
       headers: this.getHeaders(),
       body: JSON.stringify({ line }),
     });
-    return res.json();
+    return this.handle(res);
   },
 
   async getLogs(): Promise<ApiResponse<ActivityLog[]>> {

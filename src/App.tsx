@@ -39,6 +39,12 @@ export default function App() {
     api.setToken(null);
   };
 
+  // Token hết hạn (server trả 401) -> tự động đăng xuất, quay về trang login
+  useEffect(() => {
+    api.setOnUnauthorized(handleLogout);
+    return () => api.setOnUnauthorized(null);
+  }, []);
+
   // Handle URL navigation
   useEffect(() => {
     const handlePopState = () => {

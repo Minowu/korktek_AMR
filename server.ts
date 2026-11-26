@@ -44,7 +44,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
 
 async function startServer() {
   const app = express();
-  const PORT = 3001; // Đổi sang 3001 để tránh đụng Express port
+  const PORT = 3000; // Đổi sang 3001 để tránh đụng Express port
 
   app.use(express.json());
 
@@ -428,7 +428,7 @@ async function startServer() {
       });
     }
 
-    const triggerConfig = stationConfig.triggers.find(t => t.id === triggerId);
+    const triggerConfig = (stationConfig.triggers || []).find(t => t.id === triggerId);
     if (!triggerConfig) {
       return res.status(404).json({
         success: false,
@@ -891,7 +891,7 @@ async function startServer() {
   // --- VITE MIDDLEWARE SETUP ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: { port: 24679 } }, // Đổi sang 24679 để tránh đụng HMR port
+      server: { middlewareMode: true, hmr: { port: 24679 } },
       appType: 'spa',
     });
     app.use(vite.middlewares);

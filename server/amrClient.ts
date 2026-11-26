@@ -56,6 +56,17 @@ export interface AmrTriggerPayload {
   currentStation?: string;
 }
 
+export interface AmrCallResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+  httpStatus?: number;
+  durationMs: number;
+  targetUrl: string;
+  rawText?: string;
+  rcsCode?: number;
+}
+
 class AmrClientService {
   private configPath = path.join(process.cwd(), 'server', 'config.json');
   private config!: AmrConfig;
@@ -84,13 +95,7 @@ class AmrClientService {
   /**
    * Send Order to AMR System
    */
-  public async sendOrder(payload: AmrOrderPayload): Promise<{
-    success: boolean;
-    data?: any;
-    error?: string;
-    httpStatus?: number;
-    durationMs: number;
-  }> {
+  public async sendOrder(payload: AmrOrderPayload): Promise<AmrCallResult> {
     const startTime = Date.now();
     const { baseUrl, orderPath, timeoutMs } = this.config.amrSystem;
 
@@ -113,12 +118,6 @@ class AmrClientService {
       clearTimeout(timeoutId);
       const durationMs = Date.now() - startTime;
       const text = await response.text();
-      console.log(`\n--- [sendOrder] GỬI LỆNH ĐẾN RCS ---`);
-      console.log(`URL: ${targetUrl}`);
-      console.log(`Payload: ${JSON.stringify(payload)}`)
-      console.log(`HTTP Status: ${response.status} | response.ok = ${response.ok}`);
-      console.log(`Phản hồi (RAW Text):`, text);
-      console.log(`------------------------------------\n`);
 
       let resJson: any = null;
       try {
@@ -130,9 +129,11 @@ class AmrClientService {
       if (!response.ok) {
         return {
           success: false,
-          error: `AMR System lỗi khi cố gửi đến RCS${response.status}: ${text}`,
+          error: `AMR System lỗi HTTP ${response.status}: ${text}`,
           httpStatus: response.status,
           durationMs,
+          targetUrl,
+          rawText: text,
         };
       }
 
@@ -142,6 +143,10 @@ class AmrClientService {
           error: `AMR System từ chối lệnh (code: ${resJson.code}): ${resJson.desc || resJson.msg || JSON.stringify(resJson)}`,
           httpStatus: response.status,
           durationMs,
+          targetUrl,
+          rawText: text,
+          rcsCode: resJson.code,
+          data: resJson,
         };
       }
 
@@ -149,6 +154,10 @@ class AmrClientService {
         success: true,
         data: resJson,
         durationMs,
+        targetUrl,
+        rawText: text,
+        rcsCode: resJson?.code,
+        httpStatus: response.status,
       };
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -158,12 +167,14 @@ class AmrClientService {
           success: false,
           error: `AMR System quá thời gian chờ (Timeout sau ${timeoutMs}ms)`,
           durationMs,
+          targetUrl,
         };
       }
       return {
         success: false,
         error: `Không thể kết nối đến AMR System (${baseUrl}): ${err.message}`,
         durationMs,
+        targetUrl,
       };
     }
   }
@@ -171,13 +182,7 @@ class AmrClientService {
   /**
    * Send Trigger to AMR System
    */
-  public async sendTrigger(payload: AmrTriggerPayload): Promise<{
-    success: boolean;
-    data?: any;
-    error?: string;
-    httpStatus?: number;
-    durationMs: number;
-  }> {
+  public async sendTrigger(payload: AmrTriggerPayload): Promise<AmrCallResult> {
     const startTime = Date.now();
     const { baseUrl, triggerPath, timeoutMs } = this.config.amrSystem;
 
@@ -201,13 +206,6 @@ class AmrClientService {
       const durationMs = Date.now() - startTime;
       const text = await response.text();
 
-      console.log(`\n--- [sendTrigger] GỬI KÍCH HOẠT (TRIGGER) ĐẾN RCS ---`);
-      console.log(`URL: ${targetUrl}`);
-      console.log(`Payload: ${JSON.stringify(payload)}`);
-      console.log(`HTTP Status: ${response.status} | response.ok = ${response.ok}`);
-      console.log(`Phản hồi (RAW Text):`, text);
-      console.log(`-------------------------------------------------------\n`);
-
       let resJson: any = null;
       try {
         resJson = JSON.parse(text);
@@ -221,6 +219,8 @@ class AmrClientService {
           error: `AMR System trả mã lỗi HTTP ${response.status}: ${text}`,
           httpStatus: response.status,
           durationMs,
+          targetUrl,
+          rawText: text,
         };
       }
 
@@ -228,16 +228,24 @@ class AmrClientService {
         if (resJson.code == 4201) {
           return {
             success: false,
-            error: 'AMR chưa đến điểm kích hoạt, xin vui lòng thử bấm lại sau',
+            error: 'AMR chưa đến điểm kích hoạt, xin vui lòng thử bấm lại sau (Code: 4201)',
             httpStatus: response.status,
             durationMs,
-          }
+            targetUrl,
+            rawText: text,
+            rcsCode: 4201,
+            data: resJson,
+          };
         }
         return {
           success: false,
           error: `AMR từ chối lệnh Trigger (code: ${resJson.code}): ${resJson.desc || resJson.msg || JSON.stringify(resJson)}`,
           httpStatus: response.status,
           durationMs,
+          targetUrl,
+          rawText: text,
+          rcsCode: resJson.code,
+          data: resJson,
         };
       }
 
@@ -245,6 +253,10 @@ class AmrClientService {
         success: true,
         data: resJson,
         durationMs,
+        targetUrl,
+        rawText: text,
+        rcsCode: resJson?.code,
+        httpStatus: response.status,
       };
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -254,12 +266,14 @@ class AmrClientService {
           success: false,
           error: `Trigger quá thời gian chờ (Timeout sau ${timeoutMs}ms)`,
           durationMs,
+          targetUrl,
         };
       }
       return {
         success: false,
         error: `Không thể kết nối gửi Trigger đến AMR System (${baseUrl}): ${err.message}`,
         durationMs,
+        targetUrl,
       };
     }
   }

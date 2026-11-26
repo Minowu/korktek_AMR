@@ -5,6 +5,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { amrClient } from './server/amrClient.js';
 import { stateManager } from './server/state.js';
+import { controlLogger } from './server/controlLogger.js';
 
 let users: any[] = [];
 try {
@@ -16,14 +17,23 @@ try {
 const activeSessions = new Map<string, any>();
 
 const checkAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    controlLogger.authInvalidToken({
+      ip: clientIp,
+      notice: 'Yêu cầu thiếu header Authorization hoặc không đúng định dạng Bearer',
+    });
     res.status(401).json({ success: false, errorCode: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' });
     return;
   }
   const token = authHeader.split(' ')[1];
   const user = activeSessions.get(token);
   if (!user) {
+    controlLogger.authInvalidToken({
+      ip: clientIp,
+      notice: 'Token không tồn tại hoặc phiên đăng nhập đã hết hạn',
+    });
     res.status(401).json({ success: false, errorCode: 'INVALID_TOKEN', message: 'Phiên đăng nhập hết hạn.' });
     return;
   }
@@ -40,15 +50,27 @@ async function startServer() {
 
   // --- AUTH ROUTES ---
   app.post('/api/auth/login', (req, res) => {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
     const { username, password } = req.body;
     const user = users.find(u => u.username === username && u.password === password);
     if (!user) {
+      controlLogger.authLoginFailed({
+        user: username,
+        ip: clientIp,
+        notice: 'Sai tên đăng nhập hoặc mật khẩu',
+      });
       res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không đúng.' });
       return;
     }
     const token = crypto.randomBytes(16).toString('hex');
     const userData = { username: user.username, permissions: user.permissions };
     activeSessions.set(token, userData);
+
+    controlLogger.authLoginSuccess({
+      user: user.username,
+      ip: clientIp,
+      notice: `Quyền hạn: [${user.permissions.join(', ')}]`,
+    });
 
     res.json({
       success: true,
@@ -189,10 +211,18 @@ async function startServer() {
    */
   app.post('/api/order', checkAuth, async (req, res) => {
     const user = (req as any).user;
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
     const { line: lineKey, station: stationKey } = req.body || {};
 
     const requiredPath = `/control/${lineKey?.toLowerCase()}/${stationKey?.toLowerCase()}`;
     if (!user.permissions.includes('*') && !user.permissions.includes(requiredPath)) {
+      controlLogger.authForbidden({
+        user: user?.username,
+        ip: clientIp,
+        line: lineKey,
+        station: stationKey,
+        notice: `Tài khoản '${user?.username}' không có quyền gọi lệnh trên trạm ${requiredPath}`,
+      });
       res.status(403).json({ success: false, errorCode: 'FORBIDDEN', message: 'Bạn không có quyền thực hiện trên trạm này.' });
       return;
     }
@@ -231,6 +261,15 @@ async function startServer() {
     // Atomic try lock to pending state
     const lockResult = stateManager.lockLinePending(lineKey.toLowerCase(), stationKey.toLowerCase(), orderId);
     if (!lockResult.success) {
+      controlLogger.orderLockRejected({
+        line: lineKey,
+        station: stationKey,
+        user: user?.username,
+        ip: clientIp,
+        orderId,
+        notice: lockResult.error,
+      });
+
       stateManager.addLog({
         type: 'ORDER',
         line: lineKey,
@@ -265,6 +304,20 @@ async function startServer() {
       // Revert lock so line doesn't remain deadlocked on AMR network/rejection error
       stateManager.resetLine(lineKey.toLowerCase());
 
+      controlLogger.orderSendFailed({
+        orderId,
+        line: lineKey,
+        station: stationKey,
+        user: user?.username,
+        ip: clientIp,
+        targetUrl: amrResult.targetUrl,
+        payload: orderPayload,
+        durationMs: amrResult.durationMs,
+        httpStatus: amrResult.httpStatus,
+        response: amrResult.rawText || amrResult.data,
+        error: amrResult.error,
+      });
+
       stateManager.addLog({
         type: 'ERROR',
         line: lineKey,
@@ -288,6 +341,19 @@ async function startServer() {
 
     // Successful, confirm the state to running
     stateManager.confirmLineRunning(lineKey.toLowerCase());
+
+    controlLogger.orderSendSuccess({
+      orderId,
+      line: lineKey,
+      station: stationKey,
+      user: user?.username,
+      ip: clientIp,
+      targetUrl: amrResult.targetUrl,
+      payload: orderPayload,
+      durationMs: amrResult.durationMs,
+      httpStatus: amrResult.httpStatus,
+      response: amrResult.data,
+    });
 
     stateManager.addLog({
       type: 'ORDER',
@@ -319,10 +385,18 @@ async function startServer() {
    */
   app.post('/api/trigger', checkAuth, async (req, res) => {
     const user = (req as any).user;
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
     const { line: lineKey, station: stationKey, triggerId } = req.body || {};
 
     const requiredPath = `/control/${lineKey?.toLowerCase()}/${stationKey?.toLowerCase()}`;
     if (!user.permissions.includes('*') && !user.permissions.includes(requiredPath)) {
+      controlLogger.authForbidden({
+        user: user?.username,
+        ip: clientIp,
+        line: lineKey,
+        station: stationKey,
+        notice: `Tài khoản '${user?.username}' không có quyền gọi lệnh trên trạm ${requiredPath}`,
+      });
       res.status(403).json({ success: false, errorCode: 'FORBIDDEN', message: 'Bạn không có quyền thực hiện trên trạm này.' });
       return;
     }
@@ -365,6 +439,15 @@ async function startServer() {
 
     const lineState = stateManager.getLineState(lineKey.toLowerCase());
     if (lineState.status !== 'running') {
+      controlLogger.writeLog('WARN', 'TRIGGER_REJECTED', {
+        line: lineKey,
+        station: stationKey,
+        triggerPoint: triggerConfig.triggerStation,
+        user: user?.username,
+        ip: clientIp,
+        notice: `Line '${lineKey.toUpperCase()}' chưa có lệnh hoạt động. Vui lòng bấm GỌI LỆNH trước khi kích hoạt trigger.`,
+      });
+
       return res.status(409).json({
         success: false,
         errorCode: 'LINE_NOT_RUNNING',
@@ -382,6 +465,39 @@ async function startServer() {
     const triggerResult = await amrClient.sendTrigger(triggerPayload);
 
     if (!triggerResult.success) {
+      if (triggerResult.rcsCode === 4201) {
+        controlLogger.triggerRejected({
+          orderId: currentOrderId,
+          line: lineKey,
+          station: stationKey,
+          triggerPoint: triggerConfig.triggerStation,
+          user: user?.username,
+          ip: clientIp,
+          targetUrl: triggerResult.targetUrl,
+          payload: triggerPayload,
+          durationMs: triggerResult.durationMs,
+          httpStatus: triggerResult.httpStatus,
+          response: triggerResult.rawText || triggerResult.data,
+          notice: 'AMR chưa đến điểm kích hoạt (Code: 4201). Vui lòng đợi xe đến trạm dừng hẳn rồi bấm lại.',
+          error: triggerResult.error,
+        });
+      } else {
+        controlLogger.triggerFailed({
+          orderId: currentOrderId,
+          line: lineKey,
+          station: stationKey,
+          triggerPoint: triggerConfig.triggerStation,
+          user: user?.username,
+          ip: clientIp,
+          targetUrl: triggerResult.targetUrl,
+          payload: triggerPayload,
+          durationMs: triggerResult.durationMs,
+          httpStatus: triggerResult.httpStatus,
+          response: triggerResult.rawText || triggerResult.data,
+          error: triggerResult.error,
+        });
+      }
+
       stateManager.addLog({
         type: 'ERROR',
         line: lineKey,
@@ -410,6 +526,20 @@ async function startServer() {
     if (activeDev) {
       activeDev.subTaskStatus = '2';
     }
+
+    controlLogger.triggerSuccess({
+      orderId: currentOrderId,
+      line: lineKey,
+      station: stationKey,
+      triggerPoint: triggerConfig.triggerStation,
+      user: user?.username,
+      ip: clientIp,
+      targetUrl: triggerResult.targetUrl,
+      payload: triggerPayload,
+      durationMs: triggerResult.durationMs,
+      httpStatus: triggerResult.httpStatus,
+      response: triggerResult.data,
+    });
 
     stateManager.addLog({
       type: 'TRIGGER',
@@ -441,9 +571,16 @@ async function startServer() {
    */
   app.post('/api/line/reset', checkAuth, (req, res) => {
     const user = (req as any).user;
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
     const { line: lineKey } = req.body || {};
 
     if (!user.permissions.includes('*')) {
+      controlLogger.authForbidden({
+        user: user?.username,
+        ip: clientIp,
+        line: lineKey,
+        notice: `Tài khoản '${user?.username}' không phải Admin, bị từ chối mở khóa Line`,
+      });
       res.status(403).json({ success: false, errorCode: 'FORBIDDEN', message: 'Chỉ Admin mới có quyền mở khóa Line.' });
       return;
     }
@@ -456,6 +593,7 @@ async function startServer() {
       });
     }
 
+    const previousState = stateManager.getLineState(lineKey.toLowerCase());
     const result = stateManager.resetLine(lineKey.toLowerCase());
     if (!result.success) {
       return res.status(404).json({
@@ -464,6 +602,15 @@ async function startServer() {
         message: result.message,
       });
     }
+
+    controlLogger.lineReset({
+      line: lineKey,
+      user: user?.username,
+      ip: clientIp,
+      orderId: previousState.currentOrderId || undefined,
+      previousStatus: previousState.status,
+      notice: result.message,
+    });
 
     return res.json({
       success: true,
@@ -477,8 +624,6 @@ async function startServer() {
    * Webhook to receive status updates from RCS (Auto-reset line when completed)
    */
   app.post('/api/deviceInfo', (req, res) => {
-    console.log('\n[WEBHOOK] /api/deviceInfo RAW PAYLOAD:');
-    console.log(JSON.stringify(req.body, null, 2));
     try {
       const data = req.body;
       if (data && Array.isArray(data)) {
@@ -491,8 +636,6 @@ async function startServer() {
   });
 
   app.all('/api/rcs', (req, res) => {
-    console.log('\n[WEBHOOK] /api/rcs RAW PAYLOAD:');
-    console.log(JSON.stringify(req.body, null, 2));
     try {
       // API gửi dạng { at: '...', payload: { ... } } hoặc gửi trực tiếp { ... }
       let payload = req.body?.payload || req.body || {};
@@ -577,6 +720,15 @@ async function startServer() {
         }
 
         stateManager.updateDeviceTaskStep(deviceCode, String(subTaskSeq), stepName, orderId || '', resolvedSubTaskStatus);
+
+        if (orderId) {
+          controlLogger.rcsOrderProgress({
+            orderId,
+            line: targetLine || undefined,
+            deviceCode,
+            notice: `RCS cập nhật bước subtask: ${stepName} (status: ${status}, subTaskStatus: ${resolvedSubTaskStatus})`,
+          });
+        }
       }
 
       // 3. Logic xử lý trạng thái tổng thể của order (Mở khoá line & Xóa subtask trên xe)
@@ -597,6 +749,16 @@ async function startServer() {
         stateManager.clearDeviceTask(deviceCode, orderId);
 
         const statusText = status == 8 ? 'hoàn thành' : status == 3 ? 'đã huỷ' : 'thất bại';
+
+        if (orderId) {
+          controlLogger.rcsOrderFinished({
+            orderId,
+            line: targetLine || undefined,
+            deviceCode,
+            notice: `RCS báo lệnh ${orderId} ${statusText} (status: ${status}). Đã tự động mở khóa Line và xóa trạng thái Subtask.`,
+          });
+        }
+
         stateManager.addLog({
           type: 'ORDER',
           line: targetLine || 'ALL',
@@ -605,6 +767,15 @@ async function startServer() {
           message: `[WEBHOOK] RCS báo lệnh ${orderId || 'không rõ'} ${statusText} (status: ${status}). Đã tự động mở khóa Line và xóa trạng thái Subtask.`
         });
       } else {
+        if (orderId && subTaskSeq === undefined) {
+          controlLogger.rcsOrderProgress({
+            orderId,
+            line: targetLine || undefined,
+            deviceCode,
+            notice: `RCS cập nhật lệnh với trạng thái: ${status}`,
+          });
+        }
+
         // Ghi log cho tất cả các tín hiệu khác mà không mở khóa Line
         stateManager.addLog({
           type: 'ORDER',
@@ -628,8 +799,6 @@ async function startServer() {
    * Webhook to receive alarm updates (e.g. obstacle alert)
    */
   app.post('/api/alarm', (req, res) => {
-    console.log('\n[WEBHOOK] /api/alarm RAW PAYLOAD:');
-    console.log(JSON.stringify(req.body, null, 2));
     try {
       const payload = req.body || {};
       const { deviceName, deviceNum, channelDeviceId, alarmType, alarmDesc } = payload;
